@@ -1,0 +1,48 @@
+{
+  "name": "@mfukushim/submarine-attack-mcp-apps",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Submarine attack game for MCP Apps",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mfukushim/submarine-attack-mcp-apps"
+  },
+  "license": "MIT",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "cross-env NODE_ENV=development npm run build && wrangler dev",
+    "build": "pnpm run build:view &&cpy dist_view/mcp-app.html mcp/rule-logic/board.html",
+    "build:view": "tsc --noEmit && cross-env INPUT=mcp-app.html vite build",
+    "cpy": "cpy dist_view/mcp-app.html mcp/rule-logic/board.html",
+    "build2": "tsc --noEmit && cross-env INPUT=mcp-app.html vite build && bun build index.ts --outdir \"dist_view\" --format esm --target node --external \"./server.js\" --external \"cloudflare:email\" --external \"cloudflare:workers\" --banner \"#!/usr/bin/env node\"",
+    "cf-typegen": "wrangler types",
+    "start": "wrangler dev",
+    "type-check": "tsc --noEmit",
+    "inspect": "npx @modelcontextprotocol/inspector --config mcp-config.json --server reversi",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.0.1",
+    "@modelcontextprotocol/sdk": "1.25.2",
+    "agents": "^0.3.6",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "vue": "^3.5.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260131.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/node": "22.10.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "bun": "^1.3.8",
+    "concurrently": "^9.2.1",
+    "cpy-cli": "^7.0.0",
+    "cross-env": "^10.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.0",
+    "wrangler": "^4.61.1"
+  }
+}
