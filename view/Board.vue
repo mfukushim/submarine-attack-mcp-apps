@@ -32,7 +32,29 @@
       <div class="boards">
         <div class="boardWrap">
           <h3>自分の盤面</h3>
-          <div ref="ownBoardEl" class="board" data-board="own" />
+          <div class="grid">
+            <div class="row">
+              <div class="cell" data-coord="A1"></div>
+            </div>
+            <div
+                v-for="(ch, i) in p1.board"
+                :key="i"
+                :class="['cell', { disabled: clickDisabled }]"
+                :data-coord="getCoord(i)"
+                tabindex="0"
+                :aria-label="getCoord(i)"
+                @click="onCell(getCoord(i))"
+                @keydown="onKeydown($event, getCoord(i))"
+            >
+              <div v-if="ch === 'B'" :class="['disc', 'B', { appear: animCoord === getCoord(i) }]"></div>
+              <div v-else-if="ch === 'W'" :class="['disc', 'W', { appear: animCoord === getCoord(i) }]"></div>
+              <div v-else-if="isLegal(getCoord(i))" class="hint"></div>
+            </div>
+          </div>
+
+          <!--
+                    <div ref="ownBoardEl" class="board" data-board="own" />
+          -->
           <small class="hint">配置フェーズ: 盤面をクリックしてコマを置く</small>
         </div>
         <div class="boardWrap">
@@ -102,18 +124,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import {
-  BoardState, cloneInventory,
-  Coord, GameSnapshot,
-  inBounds,
-  keyOf,
-  makeEmptyBoard,
-  Orientation,
-  parseKey, Phase,
-  PieceKey, PIECES,
-  PlacedPiece,
-  PlayerState, SIZE
+  type BoardState,
+  type Coord, inBounds, keyOf,
+  makeEmptyBoard, type Orientation,
+  parseKey, type Phase,
+  PIECES,
+  type PlayerState, SIZE
 } from "../Def";
 import {
   allSunk,
@@ -140,7 +158,14 @@ const currentPlayerLabel = ref<HTMLHeadingElement | null>(null);
 
 const rotateBtnLabel = ref<string>('横向き');
 
+const cellsP1  = ref<string[][]>(Array.from({ length: SIZE*SIZE },  () => []));
+const cellsP2  = ref<string[][]>(Array.from({ length: SIZE*SIZE }, () => []));
+
 // ====== 盤面レンダリング ======
+function getCoord(i: number) {
+  return String.fromCharCode(65 + (i % 8)) + String.fromCharCode(49 + Math.floor(i / 8))
+}
+
 function clearBoardDOM(el: HTMLDivElement) {
   el.innerHTML = '';
   for (let i = 0; i < SIZE * SIZE; i++) {
@@ -153,6 +178,7 @@ function clearBoardDOM(el: HTMLDivElement) {
 
 const coordFromIndex = (idx: number): Coord => ({ x: idx % SIZE, y: Math.floor(idx / SIZE) });
 
+/*
 function renderOwnBoard(p: PlayerState) {
   if (!ownBoardEl.value) return;
   const cells = ownBoardEl.value.querySelectorAll<HTMLDivElement>('.cell');
@@ -173,18 +199,42 @@ function renderOwnBoard(p: PlayerState) {
     cells[idx].classList.add(res);
   }
 }
+*/
+
+export function renderOwnBoard(p: PlayerState) {
+  const cells = Array.from({ length: SIZE*SIZE },  () => ['cell']);
+  for (const piece of p.board.pieces)
+    for (const k of piece.cells) {
+      const { x, y } = parseKey(k);
+      const idx = y * SIZE + x;
+      const el = cells[idx];
+      el.push('ownPiece');
+      if (piece.hits.includes(k)) el.push('hit');
+    }
+  for (const [k, res] of Object.entries(p.board.attacks)) {
+    const { x, y } = parseKey(k);
+    const idx = y * SIZE + x;
+    cells[idx].push(res);
+  }
+  cellsP1.value = cells;
+}
+
 
 function renderTargetBoard(target: PlayerState) {
+  const cells = Array.from({ length: SIZE*SIZE },  () => ['cell']);
+/*
   if (!targetBoardEl.value) return;
   const cells = targetBoardEl.value.querySelectorAll<HTMLDivElement>('.cell');
   cells.forEach((c) => {
     c.className = 'cell';
   });
+*/
   for (const [k, res] of Object.entries(target.board.attacks)) {
     const { x, y } = parseKey(k);
     const idx = y * SIZE + x;
-    cells[idx].classList.add(res);
+    cells[idx].push(res);
   }
+  cellsP2.value = cells;
 }
 
 function renderInventory(p: PlayerState, selectedKey: string | null) {
@@ -245,6 +295,7 @@ function updateHeaders() {
 function renderAll() {
   updateHeaders();
   if (gameState.phase === 'battle') {
+
     renderOwnBoard(p1);
     renderTargetBoard(p2);
   } else {
@@ -449,8 +500,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-:root { --bg:#0f172a; --fg:#e5e7eb; --accent:#38bdf8; --accent-2:#22d3ee; --hit:#ef4444; --miss:#94a3b8; --grid:#1f2937; }
-*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Noto Sans JP,sans-serif}
+.layout { --bg:#0f172a; --fg:#e5e7eb; --accent:#38bdf8; --accent-2:#22d3ee; --hit:#ef4444; --miss:#94a3b8; --grid:#1f2937; }
+*{box-sizing:border-box}html,main{height:100%}main{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Noto Sans JP,sans-serif}
 header{padding:16px 20px;border-bottom:1px solid #1f2937;display:flex;gap:16px;align-items:center}
 h1{font-size:20px;margin:0}.badge{background:#111827;border:1px solid #374151;color:#e5e7eb;padding:4px 10px;border-radius:999px;font-size:12px}
 .layout{padding:20px;display:flex;justify-content:center}.panel{max-width:980px;width:100%}

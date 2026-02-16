@@ -18,7 +18,7 @@
     "cf-typegen": "wrangler types",
     "start": "wrangler dev",
     "type-check": "tsc --noEmit",
-    "inspect": "npx @modelcontextprotocol/inspector --config mcp-config.json --server reversi",
+    "inspect": "npx @modelcontextprotocol/inspector --config mcp-config.json --server submarine",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

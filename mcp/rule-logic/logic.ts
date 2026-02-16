@@ -1,18 +1,14 @@
 import {
-  BoardState, cloneInventory,
-  Coord, GameSnapshot,
+  type BoardState, cloneInventory,
+  type Coord, type GameSnapshot,
   inBounds,
   keyOf, makeEmptyBoard,
-  Orientation,
-  parseKey, PieceKey, PIECES,
-  PlacedPiece, PlacementA,
-  PlayerState,
-  SerializablePlayerState, SIZE, ValidateResult
+  type Orientation,
+  parseKey, type PieceKey, PIECES,
+  type PlacedPiece, type PlacementA,
+  type PlayerState,
+  type SerializablePlayerState, SIZE, type ValidateResult
 } from "../../Def";
-//  @ts-ignore
-// import gameRule from './gameRule.md'
-//  @ts-ignore
-// import placeRule from './placeRule.md'
 import {gameRule} from "./gameRule";
 import {placeRule} from "./placeRule";
 
@@ -61,6 +57,8 @@ if(initialState) {
 
 console.log('INIT_PATTERN',INIT_PATTERN)
 console.log('gameState',gameState)
+
+
 
 export function expandCells(w:number, h:number, origin:Coord, o:Orientation): string[] {
   const W = o==='H'? w : h;
@@ -282,7 +280,7 @@ function buildSelfBoardString(p: PlayerState): string[] {
   return grid.map((row) => row.join(''));
 }
 
-function buildOpponentKnowledgeString(attacker: PlayerState, defender: PlayerState): string[] {
+function buildOpponentKnowledgeString(_: PlayerState, defender: PlayerState): string[] {
   // 相手盤面について自分が「知っている範囲」:
   // '.' = 未攻撃, 'X' = 命中, 'o' = 外れ
   const grid: string[][] = Array.from({ length: SIZE }, () =>

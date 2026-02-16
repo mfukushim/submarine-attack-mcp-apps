@@ -5,16 +5,22 @@ import {z} from "zod";
 import {registerAppResource, registerAppTool, RESOURCE_MIME_TYPE} from "@modelcontextprotocol/ext-apps/server";
 import {
   type CallToolResult,
-  CallToolResultSchema,
   type ServerNotification,
   type ServerRequest
 } from "@modelcontextprotocol/sdk/types.js";
 import type {RequestHandlerExtra} from "@modelcontextprotocol/sdk/shared/protocol.js";
-import type {State} from "../Def";
-import {buildAiDescriptionForAiPlayer, gameState, gameToJSON, getGameRule} from "./rule-logic/logic.ts";
+import {type GameSnapshot, placement1Schema, type State} from "../Def";
+import {
+  allSunk,
+  applyGameFromJSON, applyPlacementsToPlayer,
+  buildAiDescriptionForAiPlayer,
+  gameState,
+  gameToJSON,
+  getGameRule, getPlaceRule, isPlacementEnd, p1, p2, playerToJSON, receiveAttack, setToBattle, validatePlacementSpec
+} from "./rule-logic/logic.ts";
 
 
-const resourceUri = "ui://submarine-mcp-app/game-board";
+const resourceUri = "ui://submarine-mcp-apps/game-board";
 // Define our MCP agent with tools
 export class MyMCP extends McpAgent<Env, State, {}> {
   server = new McpServer({
@@ -56,7 +62,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         }
         ]
       }
-    }),
+    });
 
     registerAppResource(this.server,'game-board',resourceUri,{
       mimeType: RESOURCE_MIME_TYPE
@@ -103,7 +109,8 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         _meta: { ui: { resourceUri: resourceUri } }
       },
       () => {
-        return this.makeResponse('これはプレイヤー1が駒を配置する準備をしている状態です。プレイヤー1に駒を配置するよう指示してください。プレイヤー2はプレイヤー1の行動を待ってください。', true);
+        return this.makeResponse(this.lang('This is the state where Player 1 is preparing to place his piece. Instruct Player 1 to place his piece. Player 2 should wait for Player 1 to act.',
+          'これはプレイヤー1が駒を配置する準備をしている状態です。プレイヤー1に駒を配置するよう指示してください。プレイヤー2はプレイヤー1の行動を待ってください。'));
       });
     registerAppTool(this.server,
       "get-board",
@@ -125,7 +132,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
             mes = "プレイヤー2のターン。player2-attack-positionを使ってOPPONENT_BOARDの位置にショットを発射してください。row=0 から 6。col=0 から 6"
             break
         }
-        return this.makeResponse(mes,true);
+        return this.makeResponse(mes);
       },
     );
     registerAppTool(this.server,
@@ -134,82 +141,179 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         title: "player1 placement ships",
         description: "User move a stone. Do not use. The user moves the stone directly using other methods.",
         inputSchema: {
-          move: z.string().describe('Where to place the black stone. Specify one of A1 to H8. Pass to PASS.'),
+          state: z.any().describe('Game state from player1'),
           gameSession: z.string().optional(),
           locale: z.string().optional(),
         },
         _meta: {}
       },
-      ({move,gameSession,locale},_: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      ({state,locale}) => {
         if (locale) {
           this.locale = locale;
         }
-        if(this.state.gameSession !== gameSession)
-          return this.makeMessage(this.lang('Game session mismatch. Please try again.', 'ゲームセッションが一致しません。もう一度お試しください。'))
 
-        let m = '';
-        // console.log('extra:',JSON.stringify(extra,null,2))
+        if (gameState.phase === "battle") {
+          return {content: [{type: "text", text: `ゲーム状態は戦闘です。配置を設定できません`, annotations: {audience: ["assistant"],}}]}
+        }
+        const st = placement1Schema.safeParse(state)
+        if(!st.success) {
+          return {content: [{type: "text", text: `解析エラー。プレイヤー2はプレイヤー1の駒を配置できません。`, annotations: {audience: ["assistant"],}}]}
+        }
+        const nextGameState = st.data;
+        console.log('receive gameState:',JSON.stringify(nextGameState))
         try {
-          const engine = new ReversiEngine()
-          engine.import(this.state.board)
-          const res = engine.playBlack(move)
-          if (res.ok) {
-            this.state.board = engine.export()
-            this.setState({...this.state});
-          } else {
-            console.log('ng:', res.error)
-            return this.makeMessage((move === "PASS" ?
-              this.lang('User made an incorrect choice. Attempting to pass despite having a legal move','ユーザーは誤った選択をしました。合法的な動きがあるにもかかわらずパスしようとしています。')
-              : this.lang('User made an incorrect choice. User tried to place ' + this.state.board.to + ' on ' + move,`ユーザーは間違った選択をしました。ユーザーは${move}へ${this.state.board.to === "W" ? '白石' : '黒石'}を置こうとしました。`))
-              + '. error message is "' + res.error + '"')
-          }
-          const assistantTurn = this.lang(' Assistant\'s turn now. Next, Please devise a position for the next white stone and put a white stone by select-assistant(e.g., {"move":"A1"}).',
-            'Assistantのターンです。次に白石を置く場所を設計し、select-assistantで白石を置くようにしてください（例：{"move":"A1"}）。')
-          m = res.pass ?
-              this.lang('User passed.','Userはパスしました。')+assistantTurn :
-            res.reset ?
-              this.lang('User reset the game. User\'s turn now.','Userはゲームをリセットしました。Userのターンです。') :
-              this.lang('The user has already placed the next stone, so the board state has changed. User placed B on ' + move +'. ' +assistantTurn,
-                `ユーザーは次の石をすでに置きました。盤面の状態は変更されました。ユーザーは${move}へ${this.state.board.to === "W" ? '白石' : '黒石'}を置きました。` +assistantTurn)
+          //  TODO 厳格には届いたnextGameStateが妥当に設定されているかベリファイがいる
+          applyGameFromJSON(nextGameState)
+          return this.setGameState();
+          //  TODO 今は仮にAI側盤面は自動生成にする
+          // randomFillForPlayer(p2)
+          // lockAiBoard()
         } catch (e: any) {
           console.log('error:', e.toString())
           return {content: [{type: "text", text: `error: ${e.message}`, annotations: {audience: ["assistant"],}}]}
         }
-        return this.makeMessage(`${m}\n${this.boardInfo()} ${this.noRepresents}`)
       }
     );
     registerAppTool(this.server,
-      "select-assistant",
+      "player2-placement",
       {
-        title: "Assistant move a stone",
-        description: "Assistant move a stone and show the board to the user.",
+        title: "Player2 set placement ships",
+        description: "Player2 placement all ships",
         inputSchema: {
-          move: z.string().describe('Where to place the white stone. Specify one of A1 to H8. Pass to PASS.'),
+          placements: z.array(z.object({
+            piece: z.enum(["1x1", "2x2", "2x1", "3x1"]).describe('piece type'),
+            x: z.number().int().min(0).max(6).describe('fire column position'),
+            y: z.number().int().min(0).max(6).describe('fire row position'),
+            o: z.enum(["H", "V"]).optional().describe('orientation of piece. orientation "H" or "V" (omit for 1x1 and 2x2)')
+          })).describe('player2 placement ships'),
+          // gameSession: z.string().optional(), //  TODO 通信時に使用
         },
         _meta: {
           ui: { resourceUri }
         }
       },
-      ({move},_: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-        // console.log('extra:',JSON.stringify(extra,null,2))
+      ({placements}) => {
+
         try {
-          const engine = new ReversiEngine()
-          engine.import(this.state.board)
-          const res = engine.playWhite(move)
-          if (res.ok) {
-            this.state.board = engine.export()
-            this.setState({...this.state});
-          } else {
-            console.log('ng:', res.error)
-            return this.makeMessage(`${this.lang('The choice is incorrect.','選択誤りです。')} ${res.error}\n${this.boardInfo()} ${this.noRepresents}`)
+          const validatedPlacements = validatePlacementSpec(placements);
+          if(!validatedPlacements.ok) {
+            return {content: [{type: "text", text: `プレイヤー2の配置が失敗した: ${validatedPlacements.errors.join('\n')}`, annotations: {audience: ["assistant"],}}]}
           }
+          applyPlacementsToPlayer(p2, placements)
+          // const gameState = state as GameSnapshot
+          console.log('make ai board:',JSON.stringify(p2))
+          return this.setGameState();
+          // applyGameFromJSON(gameState)
+          // randomFillForPlayer(p2)
+          // setToBattle()
         } catch (e: any) {
           console.log('error:', e.toString())
           return {content: [{type: "text", text: `error: ${e.message}`, annotations: {audience: ["assistant"],}}]}
         }
-        return this.makeMessage(`${this.lang('Board updated.')}\n${this.boardInfo()} ${this.noRepresents}`)
+        // const mes = "player1's Turn. The Player1 must specify the attack position. row=0 to 6. col=0 to 6. Player2 should wait for player1 to act."
+        // // const mes = "Assistant's Turn. Shot fire to OPPONENT_BOARD position. row=0 to 6. col=0 to 6"
+        // return this.makeResponse(mes,true);
       }
-    )
+    );
+    registerAppTool(this.server,
+      "player1-attacked",
+      {
+        title: "player1's attacked result",
+        description: "player1 attacks and sets the results.",
+        inputSchema: {
+          //  TODO stateがよいか x,yがよいか
+          state: z.any().describe('Game state from Player1'),
+          result: z.string().describe('player1 attack result. hit or miss'),
+          // x: z.number().int().min(0).max(6).describe('fire column position'),
+          // y: z.number().int().min(0).max(6).describe('fire row position'),
+          // gameSession: z.string().optional(), //  TODO 通信時に使用
+          gameSession: z.string().optional(),
+          locale: z.string().optional(),
+        },
+        _meta: {}
+      },
+      ({state,result}) => {
+        //  TODO 現在の保持しているターンと照合する ロジック的にはこちらはまだユーザ状態
+        //  TODO ゲームステートの判定は最終的にはこちらでやらないといけない。
+        const gameState = state as GameSnapshot
+        console.log('receive gameState:',JSON.stringify(gameState))
+        try {
+          applyGameFromJSON(gameState)
+        } catch (e: any) {
+          console.log('error:', e.toString())
+          return {content: [{type: "text", text: `error: ${e.message}`, annotations: {audience: ["assistant"],}}]}
+        }
+        if(allSunk(p2.board)) {
+          //  AIの勝利
+          return this.makeResponse(result+" プレイヤー2の勝利です! Game End.");
+        }
+        let mes = ''
+        switch (gameState.currentPlayer) {
+          case 1:
+            mes = result+" プレイヤー1のターンです。プレイヤー2はプレイヤー1の行動を待つ必要があります。"
+            break;
+          case 2:
+            mes = result+" プレイヤー2のターン開始。player2-attack-positionを使ってOPPONENT_BOARD の位置にショットを発射してください。row=0 から 6。col=0 から 6"
+            break
+        }
+        return this.makeResponse(mes);
+      }
+    );
+    registerAppTool(this.server,
+      "player2-attack-position",
+      {
+        title: "Player2 attacking position",
+        description: "The player2 will designate the attack position on the opponent's board.",
+        inputSchema: {
+          x: z.number().int().min(0).max(6).describe('fire column position'),
+          y: z.number().int().min(0).max(6).describe('fire row position'),
+          // gameSession: z.string().optional(),
+          // locale: z.string().optional(),
+        },
+        _meta: {}
+      },
+      ({x,y}) => {
+        //  手番間違いチェック
+        if(gameState.currentPlayer!==2) {
+          return this.makeResponse("プレイヤー1のターンです。プレイヤー2は攻撃することはできません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機する必要があります。");
+        }
+
+        const res = receiveAttack(p1.board, {x,y});
+        gameState.p1 = playerToJSON(p1) //  p1に結果が反映されるのでgameState側に移す
+        //  操作と結果をアニメ再生するためのイベントも追加する
+        gameState.motion =  {
+          posX: x,
+          posY: y,
+          hit: false,
+          aiWin: false,
+        };
+
+        if(allSunk(p1.board)) {
+          //  AIの勝利
+          gameState.currentPlayer = 1;  //  実行後のターンを変える
+          gameState.motion.aiWin = true;
+          gameState.motion.hit = true;
+          return this.makeResponse("プレイヤー1の勝利です! Game End.");
+        }
+        let mes = "プレイヤー2の攻撃は失敗しました。プレイヤー1のターンです。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機する必要があります。現状の双方の攻撃状態を短く評価してプレイヤー1を軽くあおってください。"
+        switch (res) {
+          case "repeat":
+            mes = "この位置は既に射撃済みです。OPPONENT_BOARD_KNOWLEDGEの状態を確認して、もう一度射撃してください。player2-attack-positionを使って再び射撃してください。row=0～6、col=0～6"
+            break
+          case "hit":
+            mes = "プレイヤー2の攻撃が命中しました。プレイヤー1のターンです。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。現状の双方の攻撃状態を短く評価してプレイヤー1を軽くあおってください。"
+            gameState.currentPlayer = 1;  //  実行後のターンを変える
+            gameState.motion.hit = true;
+            break
+          default:
+            gameState.currentPlayer = 1;  //  実行後のターンを変える
+            break
+        }
+        return this.makeResponse(mes);
+      }
+    );
+
+/*
     registerAppTool(this.server,
       "restore-game",
       {
@@ -234,6 +338,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         return this.makeMessage(`${this.lang('Game is restart.')}\n${this.boardInfo()} ${this.noRepresents}`)
       }
     );
+*/
 
   }
 
@@ -246,8 +351,44 @@ export class MyMCP extends McpAgent<Env, State, {}> {
     return message;
   }
 
-  private makeResponse(mes: string ,appendHtml=false) {
-      const ret = {
+  private setGameState() {
+    if (isPlacementEnd(p1) && isPlacementEnd(p2)) {
+      setToBattle()
+      const mes = "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。"
+      return this.makeResponse(mes);
+    } else if (isPlacementEnd(p1)) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: getPlaceRule(),
+            annotations: {
+              audience: ["assistant"],
+            },
+          }
+        ],
+        structuredContent: this.state as any
+      } as CallToolResult
+    } else {
+      const mes = "プレイヤー1は駒を配置しなければなりません。プレイヤー1はプレイヤー1の駒の位置を指定しなければなりません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。"
+      // const mes = "Assistant's Turn. Shot fire to OPPONENT_BOARD position. row=0 to 6. col=0 to 6"
+      return {
+        content: [
+          {
+            type: "text",
+            text: mes,
+            annotations: {
+              audience: ["assistant"],
+            },
+          }
+        ],
+        structuredContent: this.state as any
+      } as CallToolResult
+    }
+  }
+
+  private makeResponse(mes: string ) {
+      const ret:CallToolResult = {
         content: [
           {
             type: "text",
@@ -256,8 +397,10 @@ export class MyMCP extends McpAgent<Env, State, {}> {
               audience: ["assistant"],
             },
           }
-        ]
-      } as z.infer<typeof CallToolResultSchema>
+        ],
+        structuredContent: this.state as any
+      }// as z.infer<typeof CallToolResultSchema>
+/*
       if (appendHtml) {
         const st = gameToJSON();
         //  ここで渡される盤面は常にユーザ視点の盤面 gameState.currentPlayer=1 の盤面になる
@@ -284,6 +427,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
           }
         }))
       }
+*/
       // console.log('response:', JSON.stringify(ret,null,2))
       return ret;
     }

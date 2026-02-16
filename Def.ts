@@ -11,6 +11,32 @@ export const PlacedPieceSchema = z.object({ id: z.string(), key: PieceKeySchema,
 export const BoardStateSchema = z.object({ size: z.number(), pieces: z.array(PlacedPieceSchema), attacks: z.record(z.union([z.literal('hit'), z.literal('miss')])) });
 export const PlayerStateSchema = z.object({ name: z.string(), board: BoardStateSchema, inventory: z.record(z.number()) });
 export const PlayerSchema = z.union([z.literal(1), z.literal(2)]);
+
+export const MotionSchema = z.object({
+  posX: z.number().int().min(0).max(6),
+  posY: z.number().int().min(0).max(6),
+  hit: z.boolean(),
+  aiWin: z.boolean(),
+});
+export type Motion = z.infer<typeof MotionSchema>;
+// export interface Motion {
+//   posX: number,
+//   posY: number,
+//   hit: boolean,
+//   aiWin: boolean,
+// }
+
+export const placement1Schema = z.object({
+  phase: PhaseSchema,
+  orientation: OrientationSchema,
+  selectedPieceKey: z.nullable(PieceKeySchema),
+  placementHistory: z.array(PlacedPieceSchema),
+  currentPlayer: PlayerSchema,
+  p1: PlayerStateSchema,
+  p2: PlayerStateSchema,
+  motion: z.undefined(MotionSchema)
+})
+
 // ====== 型 ======
 export type Phase = z.infer<typeof PhaseSchema>;
 export type Orientation = z.infer<typeof OrientationSchema>;
@@ -79,19 +105,6 @@ export type State = {
   currentSeq: number;
 };
 
-export const MotionSchema = z.object({
-  posX: z.number().int().min(0).max(6),
-  posY: z.number().int().min(0).max(6),
-  hit: z.boolean(),
-  aiWin: z.boolean(),
-});
-export type Motion = z.infer<typeof MotionSchema>;
-// export interface Motion {
-//   posX: number,
-//   posY: number,
-//   hit: boolean,
-//   aiWin: boolean,
-// }
 
 export interface GameSnapshot{
   phase: Phase;
