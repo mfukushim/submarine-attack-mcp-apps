@@ -9,7 +9,7 @@ import {
   type ServerRequest
 } from "@modelcontextprotocol/sdk/types.js";
 import type {RequestHandlerExtra} from "@modelcontextprotocol/sdk/shared/protocol.js";
-import {type GameSnapshot, placement1Schema, type State} from "../Def";
+import {type GameSnapshot, GameSnapshotSchema, type State} from "../Def";
 import {
   allSunk,
   applyGameFromJSON, applyPlacementsToPlayer,
@@ -148,6 +148,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         _meta: {}
       },
       ({state,locale}) => {
+        console.log('p1 place:',state,locale)
         if (locale) {
           this.locale = locale;
         }
@@ -155,7 +156,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         if (gameState.phase === "battle") {
           return {content: [{type: "text", text: `ゲーム状態は戦闘です。配置を設定できません`, annotations: {audience: ["assistant"],}}]}
         }
-        const st = placement1Schema.safeParse(state)
+        const st = GameSnapshotSchema.safeParse(state)
         if(!st.success) {
           return {content: [{type: "text", text: `解析エラー。プレイヤー2はプレイヤー1の駒を配置できません。`, annotations: {audience: ["assistant"],}}]}
         }
@@ -164,6 +165,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         try {
           //  TODO 厳格には届いたnextGameStateが妥当に設定されているかベリファイがいる
           applyGameFromJSON(nextGameState)
+          this.setState({...this.state,board:nextGameState});
           return this.setGameState();
           //  TODO 今は仮にAI側盤面は自動生成にする
           // randomFillForPlayer(p2)
@@ -197,12 +199,17 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         try {
           const validatedPlacements = validatePlacementSpec(placements);
           if(!validatedPlacements.ok) {
-            return {content: [{type: "text", text: `プレイヤー2の配置が失敗した: ${validatedPlacements.errors.join('\n')}`, annotations: {audience: ["assistant"],}}]}
+            return {content: [{type: "text", text: `プレイヤー2の配置が失敗した: ${validatedPlacements.errors.join('\n')} 修正して、再びplayer2-placementを呼び出してください。`, annotations: {audience: ["assistant"],}}]}
           }
           applyPlacementsToPlayer(p2, placements)
           // const gameState = state as GameSnapshot
           console.log('make ai board:',JSON.stringify(p2))
-          return this.setGameState();
+          this.state.board.p2 = p2
+          const res = this.setGameState();
+
+          console.log('current:',JSON.stringify(this.state))
+          this.setState({board:gameState,gameSession:this.state.gameSession,currentSeq:this.state.currentSeq});
+          return res
           // applyGameFromJSON(gameState)
           // randomFillForPlayer(p2)
           // setToBattle()
@@ -237,6 +244,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         //  TODO ゲームステートの判定は最終的にはこちらでやらないといけない。
         const gameState = state as GameSnapshot
         console.log('receive gameState:',JSON.stringify(gameState))
+        this.setState({...this.state,board:gameState});
         try {
           applyGameFromJSON(gameState)
         } catch (e: any) {
@@ -353,10 +361,12 @@ export class MyMCP extends McpAgent<Env, State, {}> {
 
   private setGameState() {
     if (isPlacementEnd(p1) && isPlacementEnd(p2)) {
+      console.log('state is battle. start battle.')
       setToBattle()
       const mes = "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。"
       return this.makeResponse(mes);
     } else if (isPlacementEnd(p1)) {
+      console.log('state is placement. 1 ok 2 ng.')
       return {
         content: [
           {
@@ -370,6 +380,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         structuredContent: this.state as any
       } as CallToolResult
     } else {
+      console.log('state is placement. 1 ng 2 ng.')
       const mes = "プレイヤー1は駒を配置しなければなりません。プレイヤー1はプレイヤー1の駒の位置を指定しなければなりません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。"
       // const mes = "Assistant's Turn. Shot fire to OPPONENT_BOARD position. row=0 to 6. col=0 to 6"
       return {
@@ -400,35 +411,6 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         ],
         structuredContent: this.state as any
       }// as z.infer<typeof CallToolResultSchema>
-/*
-      if (appendHtml) {
-        const st = gameToJSON();
-        //  ここで渡される盤面は常にユーザ視点の盤面 gameState.currentPlayer=1 の盤面になる
-        console.log('gameState:', JSON.stringify(st,null,2))
-        const body = renderToStaticMarkup(<Layout clientScript={clientScript.replace("= INIT_PATTERN",`= "${JSON.stringify(st).replace(/"/g, '\\"')}"`)} styleText={styleText}
-        uiSize={postMessageUISizeChange}><Game/></Layout>);
-        ret.content.push(createUIResource({
-          uri: "ui://piece-attack/board",
-          content: {type: 'rawHtml', htmlString: '<!DOCTYPE html>' + body},
-          encoding: "text",
-          resourceProps: {
-            annotations: {
-              audience: ["user"],
-            },
-          },
-          adapters: {
-            appsSdk: {
-              enabled: false,
-              config: {
-                intentHandling: 'prompt',
-                timeout: 30000
-              }
-            }
-          }
-        }))
-      }
-*/
-      // console.log('response:', JSON.stringify(ret,null,2))
       return ret;
     }
 

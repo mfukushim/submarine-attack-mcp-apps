@@ -1,6 +1,6 @@
 <template>
-  <main class="layout">
-    <section class="panel">
+  <main ref="baseApp" class="layout">
+    <section class="panel" v-if="!gameDisabled">
       <header>
         <h1>潜水艦ゲーム (7×7 / 2人)</h1>
         <div ref="phaseBadge" class="badge">
@@ -17,7 +17,23 @@
         </div>
         <div class="group">
           <label>残りコマ</label>
-          <div ref="inventoryEl" class="inventory" />
+          <div class="inventory">
+            <button
+              v-for="def in PIECES"
+              :key="def.key"
+              type="button"
+              class="pieceBadge"
+              :class="{ primary: gameStateView.selectedPieceKey === def.key }"
+              :data-key="def.key"
+              :disabled="inventoryItems[def.key] === 0"
+              @click="handleInventoryClick(def.key)"
+            >
+              <span class="pieceIcon" :style="{ gridTemplateColumns: `repeat(${def.w}, auto)`, gridTemplateRows: `repeat(${def.h}, auto)` }">
+                <span v-for="i in def.w * def.h" :key="i" class="sq"></span>
+              </span>
+              <span>{{ def.label }}（残:{{ inventoryItems[def.key] }}）</span>
+            </button>
+          </div>
         </div>
         <div class="group phaseOnlyPlacement">
           <button @click="handleUndo" type="button">直前の配置を戻す</button>
@@ -32,34 +48,38 @@
       <div class="boards">
         <div class="boardWrap">
           <h3>自分の盤面</h3>
-          <div class="grid">
-            <div class="row">
-              <div class="cell" data-coord="A1"></div>
-            </div>
+          <div
+            ref="ownBoardEl"
+            class="board"
+            data-board="own"
+            @mousemove="handleOwnBoardMouseMove"
+            @mouseleave="handleOwnBoardMouseLeave"
+          >
             <div
-                v-for="(ch, i) in p1.board"
-                :key="i"
-                :class="['cell', { disabled: clickDisabled }]"
-                :data-coord="getCoord(i)"
-                tabindex="0"
-                :aria-label="getCoord(i)"
-                @click="onCell(getCoord(i))"
-                @keydown="onKeydown($event, getCoord(i))"
-            >
-              <div v-if="ch === 'B'" :class="['disc', 'B', { appear: animCoord === getCoord(i) }]"></div>
-              <div v-else-if="ch === 'W'" :class="['disc', 'W', { appear: animCoord === getCoord(i) }]"></div>
-              <div v-else-if="isLegal(getCoord(i))" class="hint"></div>
-            </div>
+              v-for="(cell, idx) in ownBoardCells"
+              :key="idx"
+              :class="['cell', ...cell.classes]"
+              :data-index="idx"
+              @click="handleOwnBoardClick(idx)"
+            />
           </div>
-
-          <!--
-                    <div ref="ownBoardEl" class="board" data-board="own" />
-          -->
           <small class="hint">配置フェーズ: 盤面をクリックしてコマを置く</small>
         </div>
         <div class="boardWrap">
           <h3>相手の盤面(攻撃用)</h3>
-          <div ref="targetBoardEl" class="board" data-board="target" />
+          <div
+            ref="targetBoardEl"
+            class="board"
+            data-board="target"
+            @click="handleTargetBoardClick"
+          >
+            <div
+              v-for="(cell, idx) in targetBoardCells"
+              :key="idx"
+              :class="['cell', ...cell.classes]"
+              :data-index="idx"
+            />
+          </div>
           <small class="hint">攻撃フェーズ: 盤面をクリックして攻撃</small>
         </div>
       </div>
@@ -119,19 +139,30 @@
           <button class="primary" type="button" @click="hideOverlay">開始</button>
         </div>
       </div>
+
+      <div v-if="clickDisabled" class="disabledShade">
+        <div class="disabledMessage">
+          {{locale == 'ja-JP'?'wait':'wait.'}}
+        </div>
+      </div>
     </section>
+    <div v-else class="header">
+      {{locale == 'ja-JP'?'ゲームセッションが終了したため盤面が無効です':'Board Disabled. Game session expired.'}}
+      <!--
+            <button class="CmdBtn" @click="restoreGame"> {{locale == 'ja-JP'?'ここからゲームを再開する':'Restore Game from here'}}</button>
+      -->
+    </div>
   </main>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import {
-  type BoardState,
-  type Coord, inBounds, keyOf,
-  makeEmptyBoard, type Orientation,
+  type Coord, type GameSnapshot, inBounds,
+  makeEmptyBoard,
   parseKey, type Phase,
   PIECES,
-  type PlayerState, SIZE
+  SIZE
 } from "../Def";
 import {
   allSunk,
@@ -140,17 +171,24 @@ import {
   currentOpponent,
   currentPlacer,
   expandCells,
-  gameState, gameToJSON,
+  gameState, gameToJSON, getPlaceRule, isPlacementEnd,
   p1,
-  p2, placePiece, randomFillForPlayer, receiveAttack
+  p2, placePiece, randomFillForPlayer, receiveAttack,
 } from "../mcp/rule-logic/logic";
+import {App, type McpUiHostContext} from "@modelcontextprotocol/ext-apps";
+// import * as e from "cors";
 
-
+const app = ref<App | null>(null);
+const baseApp = ref<HTMLElement | null>(null);
+const hostContext = ref<McpUiHostContext | undefined>();
+const gameDisabled = ref(false)
+const clickDisabled = ref(false)
+const gameSession = ref<string | undefined>(undefined)
+const locale = ref('en')
 
 // ====== DOM参照 ======
 const ownBoardEl = ref<HTMLDivElement | null>(null);
 const targetBoardEl = ref<HTMLDivElement | null>(null);
-const inventoryEl = ref<HTMLDivElement | null>(null);
 const turnOverlay = ref<HTMLDivElement | null>(null);
 const overlayText = ref<HTMLParagraphElement | null>(null);
 const phaseBadge = ref<HTMLDivElement | null>(null);
@@ -158,113 +196,75 @@ const currentPlayerLabel = ref<HTMLHeadingElement | null>(null);
 
 const rotateBtnLabel = ref<string>('横向き');
 
-const cellsP1  = ref<string[][]>(Array.from({ length: SIZE*SIZE },  () => []));
-const cellsP2  = ref<string[][]>(Array.from({ length: SIZE*SIZE }, () => []));
-
-// ====== 盤面レンダリング ======
-function getCoord(i: number) {
-  return String.fromCharCode(65 + (i % 8)) + String.fromCharCode(49 + Math.floor(i / 8))
-}
-
-function clearBoardDOM(el: HTMLDivElement) {
-  el.innerHTML = '';
-  for (let i = 0; i < SIZE * SIZE; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'cell';
-    cell.dataset.index = String(i);
-    el.appendChild(cell);
-  }
-}
-
+// ====== 盤面データ (リアクティブ) ======
 const coordFromIndex = (idx: number): Coord => ({ x: idx % SIZE, y: Math.floor(idx / SIZE) });
 
-/*
-function renderOwnBoard(p: PlayerState) {
-  if (!ownBoardEl.value) return;
-  const cells = ownBoardEl.value.querySelectorAll<HTMLDivElement>('.cell');
-  cells.forEach((c) => {
-    c.className = 'cell';
-  });
-  for (const piece of p.board.pieces)
+interface CellData {
+  classes: string[];
+}
+
+const ownBoardCells = ref<CellData[]>([]);
+
+const gameStateView = ref<GameSnapshot>(gameState);
+
+const calcOwnBoardCells = () => {
+  const cells: CellData[] = Array.from({ length: SIZE * SIZE }, () => ({ classes: [] }));
+
+  const p = gameState.phase === 'battle' ? p1 : currentPlacer();
+
+  // コマの配置を表示
+  for (const piece of p.board.pieces) {
     for (const k of piece.cells) {
       const { x, y } = parseKey(k);
       const idx = y * SIZE + x;
-      const el = cells[idx];
-      el.classList.add('ownPiece');
-      if (piece.hits.includes(k)) el.classList.add('hit');
+      cells[idx].classes.push('ownPiece');
+      if (piece.hits.includes(k)) {
+        cells[idx].classes.push('hit');
+      }
     }
+  }
+
+  // 攻撃結果を表示
   for (const [k, res] of Object.entries(p.board.attacks)) {
     const { x, y } = parseKey(k);
     const idx = y * SIZE + x;
-    cells[idx].classList.add(res);
+    cells[idx].classes.push(res);
   }
-}
-*/
 
-export function renderOwnBoard(p: PlayerState) {
-  const cells = Array.from({ length: SIZE*SIZE },  () => ['cell']);
-  for (const piece of p.board.pieces)
-    for (const k of piece.cells) {
-      const { x, y } = parseKey(k);
-      const idx = y * SIZE + x;
-      const el = cells[idx];
-      el.push('ownPiece');
-      if (piece.hits.includes(k)) el.push('hit');
-    }
-  for (const [k, res] of Object.entries(p.board.attacks)) {
-    const { x, y } = parseKey(k);
-    const idx = y * SIZE + x;
-    cells[idx].push(res);
-  }
-  cellsP1.value = cells;
-}
+  ownBoardCells.value = cells;
+  return cells;
+};
 
+const targetBoardCells = ref<CellData[]>([]);
 
-function renderTargetBoard(target: PlayerState) {
-  const cells = Array.from({ length: SIZE*SIZE },  () => ['cell']);
-/*
-  if (!targetBoardEl.value) return;
-  const cells = targetBoardEl.value.querySelectorAll<HTMLDivElement>('.cell');
-  cells.forEach((c) => {
-    c.className = 'cell';
-  });
-*/
+const calcTargetBoardCells = () => {
+  const cells: CellData[] = Array.from({ length: SIZE * SIZE }, () => ({ classes: [] }));
+
+  const target = gameState.phase === 'battle' ? p2 : { ...currentPlacer(), board: makeEmptyBoard() };
+
+  // 攻撃結果のみを表示
   for (const [k, res] of Object.entries(target.board.attacks)) {
     const { x, y } = parseKey(k);
     const idx = y * SIZE + x;
-    cells[idx].push(res);
+    cells[idx].classes.push(res);
   }
-  cellsP2.value = cells;
+
+  targetBoardCells.value = cells;
+  return cells;
+};
+
+const inventoryItems =ref<Record<string, number>>({});
+
+const setInventoryItems = () => {
+  const p = gameState.phase === 'battle' ? currentAttacker() : currentPlacer();
+  const items: Record<string, number> = {};
+  for (const def of PIECES) {
+    items[def.key] = p.inventory[def.key] ?? 0;
+  }
+  inventoryItems.value = items;
+  return items;
 }
 
-function renderInventory(p: PlayerState, selectedKey: string | null) {
-  if (!inventoryEl.value) return;
-  inventoryEl.value.innerHTML = '';
-  for (const def of PIECES) {
-    const left = p.inventory[def.key] ?? 0;
-    const badge = document.createElement('button');
-    badge.type = 'button';
-    badge.className = 'pieceBadge';
-    badge.dataset.key = def.key;
-    if (left === 0) badge.disabled = true;
-    if (selectedKey === def.key) badge.classList.add('primary');
-    const icon = document.createElement('span');
-    icon.className = 'pieceIcon';
-    icon.style.gridTemplateColumns = `repeat(${def.w}, auto)`;
-    icon.style.gridTemplateRows = `repeat(${def.h}, auto)`;
-    for (let y = 0; y < def.h; y++)
-      for (let x = 0; x < def.w; x++) {
-        const sq = document.createElement('span');
-        sq.className = 'sq';
-        icon.appendChild(sq);
-      }
-    const txt = document.createElement('span');
-    txt.textContent = `${def.label}（残:${left}）`;
-    badge.appendChild(icon);
-    badge.appendChild(txt);
-    inventoryEl.value.appendChild(badge);
-  }
-}
 
 function setPhaseUI(phase: Phase) {
   const placement = document.querySelector('.phaseOnlyPlacement') as HTMLElement;
@@ -294,28 +294,20 @@ function updateHeaders() {
 
 function renderAll() {
   updateHeaders();
-  if (gameState.phase === 'battle') {
-
-    renderOwnBoard(p1);
-    renderTargetBoard(p2);
-  } else {
-    renderOwnBoard(currentPlacer());
-    renderTargetBoard({ ...currentPlacer(), board: makeEmptyBoard() });
-  }
-  renderInventory(gameState.phase === 'battle' ? currentAttacker() : currentPlacer(), gameState.selectedPieceKey);
+  calcOwnBoardCells();
+  calcTargetBoardCells()
 }
 
 // ====== イベントハンドラ ======
 function handleRotate() {
   gameState.orientation = gameState.orientation === 'H' ? 'V' : 'H';
   rotateBtnLabel.value = gameState.orientation === 'H' ? '横向き' : '縦向き';
+  gameStateView.value = gameState;
 }
 
-function handleInventoryClick(e: MouseEvent) {
-  const t = (e.target as HTMLElement).closest('button[data-key]') as HTMLButtonElement | null;
-  if (!t) return;
-  gameState.selectedPieceKey = t.dataset.key ?? null;
-  renderInventory(gameState.phase === 'battle' ? currentAttacker() : currentPlacer(), gameState.selectedPieceKey);
+function handleInventoryClick(key: string) {
+  gameState.selectedPieceKey = key;
+  gameStateView.value.selectedPieceKey = key;
 }
 
 function handleOwnBoardMouseMove(e: MouseEvent) {
@@ -343,18 +335,17 @@ function handleOwnBoardMouseLeave() {
   ownBoardEl.value.querySelectorAll('.cell').forEach((c) => c.classList.remove('validPreview', 'invalidPreview'));
 }
 
-function handleOwnBoardClick(e: MouseEvent) {
+function handleOwnBoardClick(idx: number) {
   if (gameState.phase === 'battle' || !gameState.selectedPieceKey) return;
   const def = PIECES.find((d) => d.key === gameState.selectedPieceKey)!;
   if ((currentPlacer().inventory[gameState.selectedPieceKey] ?? 0) <= 0) return;
-  const t = (e.target as HTMLElement).closest('.cell') as HTMLDivElement | null;
-  if (!t) return;
-  const idx = Number(t.dataset.index);
   const origin = coordFromIndex(idx);
   if (!canPlace(currentPlacer().board, def.w, def.h, origin, gameState.orientation)) return;
   const placed = placePiece(currentPlacer().board, def.key, def.w, def.h, origin, gameState.orientation);
   currentPlacer().inventory[def.key] -= 1;
   gameState.placementHistory.push(placed);
+  gameStateView.value.placementHistory = gameState.placementHistory;
+  setInventoryItems()
   renderAll();
 }
 
@@ -365,16 +356,20 @@ function handleUndo() {
   const b = currentPlacer().board;
   b.pieces = b.pieces.filter((p) => p.id !== last.id);
   currentPlacer().inventory[last.key] += 1;
+  gameStateView.value.placementHistory = gameState.placementHistory;
+  setInventoryItems()
   renderAll();
 }
 
-function handleLockIn() {
+async function handleLockIn() {
   const inv = currentPlacer().inventory;
   const left = Object.values(inv).reduce((a, b) => a + b, 0);
   if (left > 0) {
     showOverlay('すべてのコマを配置してください。');
     return;
   }
+  try {
+    if (!app.value) throw new Error('App not found')
   if (gameState.phase === 'placementP1') {
     gameState.phase = 'placementP2';
     gameState.placementHistory = [];
@@ -382,23 +377,52 @@ function handleLockIn() {
     gameState.orientation = 'H';
     const state = gameToJSON();
     console.log('player1 game state:', JSON.stringify(state, null, 2));
-    window.parent.postMessage(
-      {
-        type: 'tool',
-        payload: {
-          toolName: 'player1-placement',
-          params: { state },
-        },
-      },
-      '*'
-    );
+    clickDisabled.value = true
+    const res = await app.value.callServerTool({
+      name: "player1-placement", arguments: { state: state,gameSession:gameSession.value,locale:locale.value} });
+    console.log('player1-placement result:', res)
+    // const cap = app.value.getHostCapabilities()
+    // if (cap?.updateModelContext) {
+    //   await app.value.updateModelContext(
+    //       {content:[{type:'text',text:'The user has already placed the next stone, so the board state has changed. User placed B on ' + coord
+    //               +'. Assistant\'s turn now. Next, Please devise a position for the next white stone and put a white stone by select-assistant(e.g., {"move":"A1"}).'
+    //               +` The current board state is "${JSON.stringify(state.value)}".`}]})
+    //   await app.value.sendMessage({
+    //     role: "user",
+    //     content: [{type:'text',text:locale.value === 'ja-JP' ?`黒を${coord}に置きました。あなたの手番です。`:`I placed B on ${coord}. Your turn now.`}]
+    //   })
+    // } else {
+    // window.parent.postMessage(
+    //   {
+    //     type: 'tool',
+    //     payload: {
+    //       toolName: 'player1-placement',
+    //       params: { state },
+    //     },
+    //   },
+    //   '*'
+    // );
   } else {
     gameState.phase = 'battle';
     gameState.currentPlayer = 1;
     setPhaseUI(gameState.phase);
     showOverlay('攻撃フェーズ開始。プレイヤー1のターンです。準備できたら開始。');
   }
+  gameStateView.value = { ...gameState };
   renderAll();
+      await app.value.sendMessage({
+        role: "user",
+        content: [{type:'text',text:setmessage()}]
+      })
+    // }
+
+    // 正常に実行完了したらクリックを無効化
+    // clickDisabled.value = true
+  } catch (e) {
+    console.error('call error:', e)
+    // state.value = engine.init()
+  }
+
 }
 
 function handleRandomize() {
@@ -406,6 +430,7 @@ function handleRandomize() {
   const p = currentPlacer();
   randomFillForPlayer(p);
   gameState.placementHistory = [];
+  gameStateView.value = { ...gameState };
   renderAll();
 }
 
@@ -429,73 +454,170 @@ function handleTargetBoardClick(e: MouseEvent) {
   const res = receiveAttack(currentOpponent().board, at);
   if (res === 'repeat') return;
   renderAll();
-  if (allSunk(currentOpponent().board)) {
-    setTimeout(() => {
-      window.parent.postMessage(
-        {
-          type: 'notify',
-          payload: {
-            message: `${currentAttacker().name} の勝ち！`,
+  clickDisabled.value = true
+  /*
+    if (allSunk(currentOpponent().board)) {
+      setTimeout(() => {
+        window.parent.postMessage(
+          {
+            type: 'notify',
+            payload: {
+              message: `${currentAttacker().name} の勝ち！`,
+            },
           },
-        },
-        '*'
-      );
-    }, 400);
-    return;
-  }
+          '*'
+        );
+      }, 400);
+      return;
+    }
+  */
   targetBoardEl.value.style.pointerEvents = 'none';
   let resultMes = `プレイヤー1はプレイヤー2を攻撃した。 col=${at.x}, row=${at.y}. `;
   switch (res) {
     case 'hit':
-      resultMes += ' 命中! ';
+      resultMes += ' 命中した! ';
       break;
     case 'miss':
       resultMes += ' 外れた. ';
       break;
   }
-  setTimeout(() => {
+  setTimeout(async () => {
     gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
     setPhaseUI(gameState.phase);
     const state = gameToJSON();
-    window.parent.postMessage(
-      {
-        type: 'tool',
-        payload: {
-          toolName: 'player1-attacked',
-          params: {
-            state,
-            result: resultMes,
-          },
-        },
-      },
-      '*'
-    );
+    gameStateView.value = { ...gameState };
+    try {
+      if (!app.value) throw new Error('App not found')
+      await app.value.callServerTool({
+        name: "player1-attacked", arguments: { state: state,result:resultMes,gameSession:gameSession.value,locale:locale.value} });
+      // const cap = app.value.getHostCapabilities()
+      // if (cap?.updateModelContext) {
+      //   await app.value.updateModelContext(
+      //       {content:[{type:'text',text:'The user has already placed the next stone, so the board state has changed. User placed B on ' + coord
+      //               +'. Assistant\'s turn now. Next, Please devise a position for the next white stone and put a white stone by select-assistant(e.g., {"move":"A1"}).'
+      //               +` The current board state is "${JSON.stringify(state.value)}".`}]})
+      //   await app.value.sendMessage({
+      //     role: "user",
+      //     content: [{type:'text',text:locale.value === 'ja-JP' ?`黒を${coord}に置きました。あなたの手番です。`:`I placed B on ${coord}. Your turn now.`}]
+      //   })
+      // } else {
+      let mes = ''
+      if (allSunk(currentOpponent().board)) {
+        mes = `${currentAttacker().name} の勝ち！`
+      } else {
+        mes = `あなたの手番です。`
+      }
+      await app.value.sendMessage({
+        role: "user",
+        content: [{type:'text',text:`${resultMes} ${mes} get-boardのツールを呼び出して現在の盤面を確認してください。`}]
+      })
+      // }
+
+      // 正常に実行完了したらクリックを無効化
+      // clickDisabled.value = true
+    } catch (e) {
+      console.error('call error:', e)
+      // state.value = engine.init()
+    }
+
+    // window.parent.postMessage(
+    //   {
+    //     type: 'tool',
+    //     payload: {
+    //       toolName: 'player1-attacked',
+    //       params: {
+    //         state,
+    //         result: resultMes,
+    //       },
+    //     },
+    //   },
+    //   '*'
+    // );
     if (targetBoardEl.value) targetBoardEl.value.style.pointerEvents = '';
   }, 2000);
 }
 
+function setmessage() {
+  if (isPlacementEnd(p1) && isPlacementEnd(p2)) {
+    // setToBattle()
+    return "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。get-boardのツールを呼び出して現在の盤面を確認してください。"
+  } else if (isPlacementEnd(p1)) {
+    return getPlaceRule()
+  } else {
+    return "プレイヤー1は駒を配置しなければなりません。プレイヤー1はプレイヤー1の駒の位置を指定しなければなりません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。"
+  }
+}
 
 // ====== マウント ======
-onMounted(() => {
-  if (ownBoardEl.value) {
-    clearBoardDOM(ownBoardEl.value);
-    ownBoardEl.value.addEventListener('mousemove', handleOwnBoardMouseMove);
-    ownBoardEl.value.addEventListener('mouseleave', handleOwnBoardMouseLeave);
-    ownBoardEl.value.addEventListener('click', handleOwnBoardClick);
-  }
-  if (targetBoardEl.value) {
-    clearBoardDOM(targetBoardEl.value);
-    targetBoardEl.value.addEventListener('click', handleTargetBoardClick);
-  }
-  if (inventoryEl.value) {
-    inventoryEl.value.addEventListener('click', handleInventoryClick);
-  }
+onMounted(async () => {
+  const instance = new App({ name: "Submarine App", version: "1.0.0" },{},{autoResize:false});
+
   document.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'r') handleRotate();
   });
 
+  instance.onteardown = async (params) => {
+    console.info(`App is being torn down.${params}`);
+    return {}
+  }
+  instance.ontoolinput = async (params) => {
+    console.info("Received tool call input:", params);
+  };
+  instance.ontoolresult = async (result) => {
+    console.info("Received tool call result:", result);
+/*
+    if (result.structuredContent?.board) {
+      state.value = engine.import(result.structuredContent.board as unknown as GameSnapshot)
+      recentGameState.value = result.structuredContent.board as unknown as GameSnapshot
+    }
+*/
+    if (result.structuredContent?.gameSession) {
+      gameSession.value = result.structuredContent.gameSession as string
+    }
+    // const currentSeq = state.value.seq
+    // const currentState = await importBoard()
+    // if(currentState?.gameSession && result.structuredContent?.gameSession
+    //     && currentState.gameSession === result.structuredContent?.gameSession) {
+      gameDisabled.value = false
+      // done.value = false
+      clickDisabled.value = false
+      // state.value = engine.import(currentState.board)
+      // if (currentSeq === state.value.seq) {
+      //   recentGameState.value = currentState.board
+      //   return
+      // }
+    // }
+    // console.log('Game session mismatch, disabling game',
+    //     currentState?.gameSession,result.structuredContent?.gameSession,currentSeq,state.value.seq)
+    // gameDisabled.value = true
+    // app.value?.sendSizeChanged({ height:50 });
+  };
+
+  instance.ontoolcancelled = async (params) => {
+    console.info("Tool call cancelled:", params.reason);
+  };
+
+  instance.onerror = console.error;
+
+  instance.onhostcontextchanged = async (params) => {
+    hostContext.value = { ...hostContext.value, ...params };
+  };
+
+  await instance.connect(undefined,{});
+  app.value = instance;
+  hostContext.value = instance.getHostContext();
+  if (baseApp.value) {
+    const { width, height } = baseApp.value?.getBoundingClientRect();
+    console.log('width:', width, 'height:', height)
+    app.value.sendSizeChanged({ height:Math.floor(height*1.2) });
+  }
+
   setPhaseUI(gameState.phase);
+  gameStateView.value = { ...gameState };
+  setInventoryItems()
   renderAll();
+
+
 });
 </script>
 
@@ -504,7 +626,7 @@ onMounted(() => {
 *{box-sizing:border-box}html,main{height:100%}main{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Noto Sans JP,sans-serif}
 header{padding:16px 20px;border-bottom:1px solid #1f2937;display:flex;gap:16px;align-items:center}
 h1{font-size:20px;margin:0}.badge{background:#111827;border:1px solid #374151;color:#e5e7eb;padding:4px 10px;border-radius:999px;font-size:12px}
-.layout{padding:20px;display:flex;justify-content:center}.panel{max-width:980px;width:100%}
+.layout{padding:20px;display:flex;justify-content:center}.panel{max-width:980px;width:100%;position:relative}
 .controls{display:flex;flex-wrap:wrap;gap:16px;align-items:end;margin-bottom:16px}.controls .group{display:flex;gap:8px;align-items:center}
 .inventory{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.inventory .pieceBadge{border:1px dashed #374151;padding:4px 8px;border-radius:8px;font-size:12px;display:flex;gap:6px;align-items:center}
 .pieceIcon{display:inline-grid;gap:2px;background:#0b1220;padding:4px;border-radius:6px;border:1px solid #243042}.pieceIcon .sq{width:10px;height:10px;background:var(--accent)}
@@ -517,4 +639,6 @@ button{background:#111827;color:var(--fg);border:1px solid #334155;padding:8px 1
 .cell.hit{background:var(--hit);border-color:#7f1d1d}.cell.miss{background:#0d1522;border-color:#334155;box-shadow:inset 0 0 0 3px var(--miss)}
 .hint{opacity:.7;font-size:12px}.legend{display:flex;gap:16px;align-items:center;margin-top:12px}.footerBtns{margin-top:20px}.hidden{display:none !important}
 .overlay{position:fixed;inset:0;background:rgba(2,6,23,.92);display:grid;place-items:center}.overlayCard{background:#0b1220;border:1px solid #243042;padding:24px;border-radius:16px;max-width:420px;text-align:center}
+.disabledShade{position:absolute;inset:0;background:rgba(0,0,0,.7);display:grid;place-items:center;cursor:not-allowed;z-index:100}
+.disabledMessage{background:#0b1220;border:1px solid #374151;padding:24px;border-radius:16px;color:var(--fg);font-size:16px;text-align:center;max-width:500px}
 </style>

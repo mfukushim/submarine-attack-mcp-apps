@@ -26,7 +26,7 @@ export type Motion = z.infer<typeof MotionSchema>;
 //   aiWin: boolean,
 // }
 
-export const placement1Schema = z.object({
+export const GameSnapshotSchema = z.object({
   phase: PhaseSchema,
   orientation: OrientationSchema,
   selectedPieceKey: z.nullable(PieceKeySchema),
