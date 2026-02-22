@@ -115,7 +115,9 @@ export class MyMCP extends McpAgent<Env, State, {}> {
       {
         title: "Get the current board state",
         description: "Get the current board state.",
-        _meta: { ui: { resourceUri: resourceUri } }
+        _meta: {
+          // ui: { resourceUri: resourceUri }
+        }
       },
       (_: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
         let mes = ''
