@@ -372,37 +372,11 @@ async function handleLockIn() {
   try {
     if (!app.value) throw new Error('App not found')
   if (gameState.phase === 'placementP1') {
-    // gameState.phase = 'placementP2';
-    // gameState.placementHistory = [];
-    // gameState.selectedPieceKey = '1x1';
-    // gameState.orientation = 'H';
-    // const state = gameToJSON();
     console.log('player1 game state:', JSON.stringify(gameState, null, 2));
     clickDisabled.value = true
     const res = await app.value.callServerTool({
       name: "player1-placement", arguments: { state: gameState,gameSession:gameSession.value,locale:locale.value} });
     console.log('player1-placement result:', res)
-    // const cap = app.value.getHostCapabilities()
-    // if (cap?.updateModelContext) {
-    //   await app.value.updateModelContext(
-    //       {content:[{type:'text',text:'The user has already placed the next stone, so the board state has changed. User placed B on ' + coord
-    //               +'. Assistant\'s turn now. Next, Please devise a position for the next white stone and put a white stone by select-assistant(e.g., {"move":"A1"}).'
-    //               +` The current board state is "${JSON.stringify(state.value)}".`}]})
-    //   await app.value.sendMessage({
-    //     role: "user",
-    //     content: [{type:'text',text:locale.value === 'ja-JP' ?`黒を${coord}に置きました。あなたの手番です。`:`I placed B on ${coord}. Your turn now.`}]
-    //   })
-    // } else {
-    // window.parent.postMessage(
-    //   {
-    //     type: 'tool',
-    //     payload: {
-    //       toolName: 'player1-placement',
-    //       params: { state },
-    //     },
-    //   },
-    //   '*'
-    // );
   } else {
     gameState.phase = 'battle';
     gameState.currentPlayer = 1;
@@ -415,13 +389,8 @@ async function handleLockIn() {
         role: "user",
         content: [{type:'text',text:setmessage()}]
       })
-    // }
-
-    // 正常に実行完了したらクリックを無効化
-    // clickDisabled.value = true
   } catch (e) {
     console.error('call error:', e)
-    // state.value = engine.init()
   }
 
 }
@@ -456,22 +425,6 @@ function handleTargetBoardClick(e: MouseEvent) {
   if (res === 'repeat') return;
   renderAll();
   clickDisabled.value = true
-  /*
-    if (allSunk(currentOpponent().board)) {
-      setTimeout(() => {
-        window.parent.postMessage(
-          {
-            type: 'notify',
-            payload: {
-              message: `${currentAttacker().name} の勝ち！`,
-            },
-          },
-          '*'
-        );
-      }, 400);
-      return;
-    }
-  */
   targetBoardEl.value.style.pointerEvents = 'none';
   let resultMes = `プレイヤー1はプレイヤー2を攻撃した。 col=${at.x}, row=${at.y}. `;
   switch (res) {
@@ -486,23 +439,11 @@ function handleTargetBoardClick(e: MouseEvent) {
     gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
     gameState.seq += 1;
     setPhaseUI(gameState.phase);
-    // const state = gameToJSON();
     gameStateView.value = { ...gameState };
     try {
       if (!app.value) throw new Error('App not found')
       await app.value.callServerTool({
         name: "player1-attacked", arguments: { state: gameState,result:resultMes,gameSession:gameSession.value,locale:locale.value} });
-      // const cap = app.value.getHostCapabilities()
-      // if (cap?.updateModelContext) {
-      //   await app.value.updateModelContext(
-      //       {content:[{type:'text',text:'The user has already placed the next stone, so the board state has changed. User placed B on ' + coord
-      //               +'. Assistant\'s turn now. Next, Please devise a position for the next white stone and put a white stone by select-assistant(e.g., {"move":"A1"}).'
-      //               +` The current board state is "${JSON.stringify(state.value)}".`}]})
-      //   await app.value.sendMessage({
-      //     role: "user",
-      //     content: [{type:'text',text:locale.value === 'ja-JP' ?`黒を${coord}に置きました。あなたの手番です。`:`I placed B on ${coord}. Your turn now.`}]
-      //   })
-      // } else {
       let mes = ''
       if (allSunk(currentOpponent().board)) {
         mes = `${currentAttacker().name} の勝ち！`
@@ -513,35 +454,16 @@ function handleTargetBoardClick(e: MouseEvent) {
         role: "user",
         content: [{type:'text',text:`${resultMes} ${mes} get-boardのツールを呼び出して現在の盤面を確認してください。`}]
       })
-      // }
-
-      // 正常に実行完了したらクリックを無効化
-      // clickDisabled.value = true
     } catch (e) {
       console.error('call error:', e)
-      // state.value = engine.init()
     }
 
-    // window.parent.postMessage(
-    //   {
-    //     type: 'tool',
-    //     payload: {
-    //       toolName: 'player1-attacked',
-    //       params: {
-    //         state,
-    //         result: resultMes,
-    //       },
-    //     },
-    //   },
-    //   '*'
-    // );
     if (targetBoardEl.value) targetBoardEl.value.style.pointerEvents = '';
-  }, 2000);
+  }, 500);
 }
 
 function setmessage() {
   if (isPlacementEnd(p1) && isPlacementEnd(p2)) {
-    // setToBattle()
     return "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。get-boardのツールを呼び出して現在の盤面を確認してください。"
   } else if (isPlacementEnd(p1)) {
     return getPlaceRule()
@@ -569,7 +491,6 @@ onMounted(async () => {
     console.info("Received tool call result:", result);
     if (result.structuredContent?.board) {
       applyGameFromJSON(result.structuredContent.board as unknown as GameSnapshot);
-      // state.value = engine.import(result.structuredContent.board as unknown as GameSnapshot)
       gameStateView.value = { ...gameState };
       renderAll()
       recentGameState.value = result.structuredContent.board as unknown as GameSnapshot
@@ -577,21 +498,13 @@ onMounted(async () => {
     if (!gameSession.value && result.structuredContent?.gameSession) {
       gameSession.value = result.structuredContent.gameSession as string
     }
-    // const currentSeq = state.value.seq
-    // const currentState = await importBoard()
     gameStateView.value = { ...gameState };
     if(gameSession.value && result.structuredContent?.gameSession) {
       if(gameSession.value === result.structuredContent?.gameSession) {
         gameDisabled.value = false
-        // done.value = false
         clickDisabled.value = false
         return
       }
-      // state.value = engine.import(currentState.board)
-      // if (currentSeq === state.value.seq) {
-      //   recentGameState.value = currentState.board
-      //   return
-      // }
       console.log('Game session mismatch, disabling game')
       gameDisabled.value = true
       app.value?.sendSizeChanged({ height:50 });
@@ -616,6 +529,7 @@ onMounted(async () => {
     console.log('width:', width, 'height:', height)
     app.value.sendSizeChanged({ height:Math.floor(height*1.2) });
   }
+  locale.value = hostContext.value?.locale || 'en'
 
   setPhaseUI(gameState.phase);
   gameStateView.value = { ...gameState };
