@@ -2,21 +2,21 @@
   <main ref="baseApp" class="layout">
     <section class="panel" v-if="!gameDisabled">
       <header>
-        <h1>潜水艦ゲーム (7×7 / 2人)</h1>
+        <h1>{{ lang('Submarine Game (7×7 / 2 Players)', '潜水艦ゲーム (7×7 / 2人)') }}</h1>
         <div ref="phaseBadge" class="badge">
-          配置フェーズ: プレイヤー1
+          {{ lang('Placement Phase: Player 1', '配置フェーズ: プレイヤー1') }}
         </div>
       </header>
 
-      <h2 ref="currentPlayerLabel">プレイヤー1</h2>
+      <h2 ref="currentPlayerLabel">{{ lang('Player 1', 'プレイヤー1') }}</h2>
 
       <div class="controls">
         <div class="group">
-          <label>向き:</label>
-          <button @click="handleRotate" title="Rキーでも切替">{{rotateBtnLabel}}</button>
+          <label>{{ lang('Direction:', '向き:') }}</label>
+          <button @click="handleRotate" :title="lang('Toggle with R key', 'Rキーでも切替')">{{rotateBtnLabel}}</button>
         </div>
         <div class="group">
-          <label>残りコマ</label>
+          <label>{{ lang('Remaining Pieces', '残りコマ') }}</label>
           <div class="inventory">
             <button
               v-for="def in PIECES"
@@ -31,23 +31,23 @@
               <span class="pieceIcon" :style="{ gridTemplateColumns: `repeat(${def.w}, auto)`, gridTemplateRows: `repeat(${def.h}, auto)` }">
                 <span v-for="i in def.w * def.h" :key="i" class="sq"></span>
               </span>
-              <span>{{ def.label }}（残:{{ inventoryItems[def.key] }}）</span>
+              <span>{{ def.label }}{{ lang(' (Remaining: ', '（残:') }}{{ inventoryItems[def.key] }}{{ lang(')', '）') }}</span>
             </button>
           </div>
         </div>
         <div class="group phaseOnlyPlacement">
-          <button @click="handleUndo" type="button">直前の配置を戻す</button>
-          <button @click="handleRandomize" type="button">ランダム配置</button>
-          <button @click="handleLockIn" type="button" class="primary">この配置で確定</button>
+          <button @click="handleUndo" type="button">{{ lang('Undo Last Placement', '直前の配置を戻す') }}</button>
+          <button @click="handleRandomize" type="button">{{ lang('Random Placement', 'ランダム配置') }}</button>
+          <button @click="handleLockIn" type="button" class="primary">{{ lang('Confirm Placement', 'この配置で確定') }}</button>
         </div>
         <div class="group phaseOnlyBattle hidden">
-          <button type="button">ターン終了（攻撃後）</button>
+          <button type="button">{{ lang('End Turn (After Attack)', 'ターン終了（攻撃後）') }}</button>
         </div>
       </div>
 
       <div class="boards">
         <div class="boardWrap">
-          <h3>自分の盤面</h3>
+          <h3>{{ lang('Your Board', '自分の盤面') }}</h3>
           <div
             ref="ownBoardEl"
             class="board"
@@ -63,10 +63,10 @@
               @click="handleOwnBoardClick(idx)"
             />
           </div>
-          <small class="hint">配置フェーズ: 盤面をクリックしてコマを置く</small>
+          <small class="hint">{{ lang('Placement Phase: Click board to place pieces', '配置フェーズ: 盤面をクリックしてコマを置く') }}</small>
         </div>
         <div class="boardWrap">
-          <h3>相手の盤面(攻撃用)</h3>
+          <h3>{{ lang('Opponent\'s Board (Attack)', '相手の盤面(攻撃用)') }}</h3>
           <div
             ref="targetBoardEl"
             class="board"
@@ -80,74 +80,72 @@
               :data-index="idx"
             />
           </div>
-          <small class="hint">攻撃フェーズ: 盤面をクリックして攻撃</small>
+          <small class="hint">{{ lang('Attack Phase: Click board to attack', '攻撃フェーズ: 盤面をクリックして攻撃') }}</small>
         </div>
       </div>
 
       <div class="legend">
-        <div><span class="cell miss"></span>外れ（薄いマーク）</div>
-        <div><span class="cell hit"></span>命中（濃いマーク）</div>
+        <div><span class="cell miss"></span>{{ lang('Miss (Light Mark)', '外れ（薄いマーク）') }}</div>
+        <div><span class="cell hit"></span>{{ lang('Hit (Dark Mark)', '命中（濃いマーク）') }}</div>
       </div>
 
+<!--
       <div class="footerBtns">
-        <button type="button">最初からやり直す</button>
+        <button type="button">{{ lang('Restart Game', '最初からやり直す') }}</button>
       </div>
 
-      <!-- 状態のエクスポート / インポートUI -->
+      &lt;!&ndash; 状態のエクスポート / インポートUI &ndash;&gt;
       <div class="stateIO" style="display:none">
-        <h3>ゲーム状態 JSON</h3>
+        <h3>{{ lang('Game State JSON', 'ゲーム状態 JSON') }}</h3>
         <div class="stateIO-buttons">
           <button type="button">
-            状態をJSONに出力（コピー）
+            {{ lang('Export State to JSON (Copy)', '状態をJSONに出力（コピー）') }}
           </button>
           <button type="button">
-            JSONから状態を読み込み
+            {{ lang('Load State from JSON', 'JSONから状態を読み込み') }}
           </button>
         </div>
         <textarea
           rows="6"
-          placeholder="ここに状態JSONを表示／貼り付け"
+          :placeholder="lang('Display/Paste state JSON here', 'ここに状態JSONを表示／貼り付け')"
         ></textarea>
         <p class="hint">
-          通信対戦などで使う場合：
-          自分の画面で「状態をJSONに出力」でコピー → 相手に送る →
-          相手側で貼り付けて「JSONから状態を読み込み」。
+          {{ lang('For online play: Export state to JSON and copy → Send to opponent → Opponent pastes and loads from JSON.', '通信対戦などで使う場合：自分の画面で「状態をJSONに出力」でコピー → 相手に送る → 相手側で貼り付けて「JSONから状態を読み込み」。') }}
         </p>
       </div>
       <div class="aiIO" style="display:none">
-        <h3>AI 用テキスト表現</h3>
+        <h3>{{ lang('AI Text Representation', 'AI 用テキスト表現') }}</h3>
         <div class="aiIO-buttons">
           <button type="button">
-            現在の状態からAI用テキストを生成
+            {{ lang('Generate AI Text from Current State', '現在の状態からAI用テキストを生成') }}
           </button>
         </div>
         <textarea
           rows="8"
-          placeholder="ここにAIに渡すためのテキストが出力されます"
+          :placeholder="lang('Text for AI will be output here', 'ここにAIに渡すためのテキストが出力されます')"
         />
         <p class="hint">
-          ボタンを押すと、現在の手番プレイヤー視点で、
-          盤面とゲーム状態を説明するテキストが生成されます。
-          そのままコピーして LLM に渡せます。
+          {{ lang('When you press the button, a text explaining the board and game state from the current player\'s perspective will be generated. You can copy it directly to an LLM.', 'ボタンを押すと、現在の手番プレイヤー視点で、盤面とゲーム状態を説明するテキストが生成されます。そのままコピーして LLM に渡せます。') }}
         </p>
       </div>
+-->
 
       <div ref="turnOverlay" class="overlay hidden">
         <div class="overlayCard">
-          <h2>交代</h2>
-          <p ref="overlayText">プレイヤー2に交代します。準備ができたら「開始」を押してください。</p>
-          <button class="primary" type="button" @click="hideOverlay">開始</button>
+          <h2>{{ lang('Switch Turn', '交代') }}</h2>
+          <p ref="overlayText">{{ lang('Switching to Player 2. Press "Start" when ready.', 'プレイヤー2に交代します。準備ができたら「開始」を押してください。') }}</p>
+          <button class="primary" type="button" @click="hideOverlay">{{ lang('Start', '開始') }}</button>
         </div>
       </div>
 
       <div v-if="clickDisabled" class="disabledShade">
         <div class="disabledMessage">
-          {{locale == 'ja-JP'?'wait':'wait.'}}
+          {{lang('Press Enter','エンターキーを押してください')}}
         </div>
       </div>
     </section>
     <div v-else class="header">
-      {{locale == 'ja-JP'?'ゲームセッションが終了したため盤面が無効です':'Board Disabled. Game session expired.'}}
+      {{lang('Board Disabled. Game session expired.','ゲームセッションが終了したため盤面が無効です')}}
       <!--
             <button class="CmdBtn" @click="restoreGame"> {{locale == 'ja-JP'?'ここからゲームを再開する':'Restore Game from here'}}</button>
       -->
@@ -187,6 +185,11 @@ const gameSession = ref<string | undefined>(undefined)
 const locale = ref('en')
 const recentGameState = ref<GameSnapshot | null>(null);
 
+// ====== 多言語対応 ======
+const lang = (message: string, messageJapanese?: string): string => {
+  return locale.value === 'ja-JP' ? (messageJapanese || message) : message;
+};
+
 // ====== DOM参照 ======
 const ownBoardEl = ref<HTMLDivElement | null>(null);
 const targetBoardEl = ref<HTMLDivElement | null>(null);
@@ -195,7 +198,7 @@ const overlayText = ref<HTMLParagraphElement | null>(null);
 const phaseBadge = ref<HTMLDivElement | null>(null);
 const currentPlayerLabel = ref<HTMLHeadingElement | null>(null);
 
-const rotateBtnLabel = ref<string>('横向き');
+const rotateBtnLabel = ref<string>('Horizontal');
 
 // ====== 盤面データ (リアクティブ) ======
 const coordFromIndex = (idx: number): Coord => ({ x: idx % SIZE, y: Math.floor(idx / SIZE) });
@@ -282,13 +285,13 @@ function setPhaseUI(phase: Phase) {
 function updateHeaders() {
   if (!phaseBadge.value || !currentPlayerLabel.value) return;
   if (gameState.phase === 'placementP1') {
-    phaseBadge.value.textContent = '配置フェーズ: プレイヤー1';
-    currentPlayerLabel.value.textContent = 'プレイヤー1';
+    phaseBadge.value.textContent = lang('Placement Phase: Player 1', '配置フェーズ: プレイヤー1');
+    currentPlayerLabel.value.textContent = lang('Player 1', 'プレイヤー1');
   } else if (gameState.phase === 'placementP2') {
-    phaseBadge.value.textContent = '配置フェーズ: プレイヤー2';
-    currentPlayerLabel.value.textContent = 'プレイヤー2';
+    phaseBadge.value.textContent = lang('Placement Phase: Player 2', '配置フェーズ: プレイヤー2');
+    currentPlayerLabel.value.textContent = lang('Player 2', 'プレイヤー2');
   } else {
-    phaseBadge.value.textContent = `攻撃フェーズ: 手番は ${currentAttacker().name}`;
+    phaseBadge.value.textContent = lang(`Attack Phase: ${currentAttacker().name}'s Turn`, `攻撃フェーズ: 手番は ${currentAttacker().name}`);
     currentPlayerLabel.value.textContent = currentAttacker().name;
   }
 }
@@ -302,7 +305,9 @@ function renderAll() {
 // ====== イベントハンドラ ======
 function handleRotate() {
   gameState.orientation = gameState.orientation === 'H' ? 'V' : 'H';
-  rotateBtnLabel.value = gameState.orientation === 'H' ? '横向き' : '縦向き';
+  rotateBtnLabel.value = gameState.orientation === 'H'
+    ? lang('Horizontal', '横向き')
+    : lang('Vertical', '縦向き');
   gameStateView.value = gameState;
 }
 
@@ -366,7 +371,7 @@ async function handleLockIn() {
   const inv = currentPlacer().inventory;
   const left = Object.values(inv).reduce((a, b) => a + b, 0);
   if (left > 0) {
-    showOverlay('すべてのコマを配置してください。');
+    showOverlay(lang('Please place all pieces.', 'すべてのコマを配置してください。'));
     return;
   }
   try {
@@ -381,7 +386,7 @@ async function handleLockIn() {
     gameState.phase = 'battle';
     gameState.currentPlayer = 1;
     setPhaseUI(gameState.phase);
-    showOverlay('攻撃フェーズ開始。プレイヤー1のターンです。準備できたら開始。');
+    showOverlay(lang('Attack phase begins. Player 1\'s turn. Press Start when ready.', '攻撃フェーズ開始。プレイヤー1のターンです。準備できたら開始。'));
   }
   gameStateView.value = { ...gameState };
   renderAll();
@@ -426,13 +431,13 @@ function handleTargetBoardClick(e: MouseEvent) {
   renderAll();
   clickDisabled.value = true
   targetBoardEl.value.style.pointerEvents = 'none';
-  let resultMes = `プレイヤー1はプレイヤー2を攻撃した。 col=${at.x}, row=${at.y}. `;
+  let resultMes = lang(`Player 1 attacked Player 2. col=${at.x}, row=${at.y}. `, `プレイヤー1はプレイヤー2を攻撃した。 col=${at.x}, row=${at.y}. `);
   switch (res) {
     case 'hit':
-      resultMes += ' 命中した! ';
+      resultMes += lang(' Hit! ', ' 命中した! ');
       break;
     case 'miss':
-      resultMes += ' 外れた. ';
+      resultMes += lang(' Miss. ', ' 外れた. ');
       break;
   }
   setTimeout(async () => {
@@ -446,13 +451,14 @@ function handleTargetBoardClick(e: MouseEvent) {
         name: "player1-attacked", arguments: { state: gameState,result:resultMes,gameSession:gameSession.value,locale:locale.value} });
       let mes = ''
       if (allSunk(currentOpponent().board)) {
-        mes = `${currentAttacker().name} の勝ち！`
+        mes = lang(`${currentAttacker().name} wins!`, `${currentAttacker().name} の勝ち！`)
       } else {
-        mes = `あなたの手番です。`
+        mes = lang(`Your turn.`, `あなたの手番です。`)
       }
+      const toolMsg = lang('Please call the get-board tool to check the current board state.', 'get-boardのツールを呼び出して現在の盤面を確認してください。');
       await app.value.sendMessage({
         role: "user",
-        content: [{type:'text',text:`${resultMes} ${mes} get-boardのツールを呼び出して現在の盤面を確認してください。`}]
+        content: [{type:'text',text:`${resultMes} ${mes} ${toolMsg}`}]
       })
     } catch (e) {
       console.error('call error:', e)
@@ -464,11 +470,17 @@ function handleTargetBoardClick(e: MouseEvent) {
 
 function setmessage() {
   if (isPlacementEnd(p1) && isPlacementEnd(p2)) {
-    return "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。get-boardのツールを呼び出して現在の盤面を確認してください。"
+    return lang(
+      "Battle starts. Player 1's turn. Player 2 (Assistant) waits for Player 1 (User) to act. Please call the get-board tool to check the current board state.",
+      "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。get-boardのツールを呼び出して現在の盤面を確認してください。"
+    );
   } else if (isPlacementEnd(p1)) {
-    return getPlaceRule()
+    return getPlaceRule(locale.value)
   } else {
-    return "プレイヤー1は駒を配置しなければなりません。プレイヤー1はプレイヤー1の駒の位置を指定しなければなりません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。"
+    return lang(
+      "Player 1 must place pieces. Player 1 must specify the positions of Player 1's pieces. Player 2 (Assistant) waits until Player 1 (User) acts.",
+      "プレイヤー1は駒を配置しなければなりません。プレイヤー1はプレイヤー1の駒の位置を指定しなければなりません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。"
+    );
   }
 }
 
@@ -533,6 +545,9 @@ onMounted(async () => {
 
   setPhaseUI(gameState.phase);
   gameStateView.value = { ...gameState };
+  rotateBtnLabel.value = gameState.orientation === 'H'
+    ? lang('Horizontal', '横向き')
+    : lang('Vertical', '縦向き');
   setInventoryItems()
   renderAll();
 

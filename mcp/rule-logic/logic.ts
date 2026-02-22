@@ -9,8 +9,7 @@ import {
   type PlayerState,
   type SerializablePlayerState, SIZE, type ValidateResult
 } from "../../Def";
-import {gameRule} from "./gameRule";
-import {placeRule} from "./placeRule";
+import {placeRule, placeRuleJp} from "./placeRule";
 
 // ====== 状態 ======
 export const p1: PlayerState = { name: 'Player1', board: makeEmptyBoard(), inventory: cloneInventory() };
@@ -401,12 +400,9 @@ export function buildAiDescriptionForAiPlayer(): string {
   return lines.join('\n');
 }
 
-export function getGameRule() {
-  return gameRule as string;
-}
 
-export function getPlaceRule() {
-  return placeRule as string;
+export function getPlaceRule(locale:string) {
+  return locale === 'ja-JP' ? placeRuleJp as string : placeRule as string;
 }
 
 

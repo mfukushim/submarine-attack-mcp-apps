@@ -15,11 +15,13 @@ import {
   applyGameFromJSON, applyPlacementsToPlayer,
   buildAiDescriptionForAiPlayer,
   gameState,
-  getGameRule, getPlaceRule, isPlacementEnd, p1, p2, playerToJSON, receiveAttack, setToBattle, validatePlacementSpec
+  getPlaceRule, isPlacementEnd, p1, p2, playerToJSON, receiveAttack, setToBattle, validatePlacementSpec
 } from "./rule-logic/logic.ts";
+import {gameRule, gameRuleJp} from "./rule-logic/gameRule.ts";
 
 
 const resourceUri = "ui://submarine-mcp-apps/game-board";
+
 // Define our MCP agent with tools
 export class MyMCP extends McpAgent<Env, State, {}> {
   server = new McpServer({
@@ -47,24 +49,24 @@ export class MyMCP extends McpAgent<Env, State, {}> {
   //   '盤面はすでにユーザーに提示されているため、アシスタントが再度提示する必要はありません。')
 
   async init() {
-    this.server.registerResource("GameRule","file:///game-rule",{
-      title:"Submarine Game Rule",
-      description:"description of game rule",
-      mimeType:"text/plain"
-    },() => {
+    this.server.registerResource("GameRule", "file:///game-rule", {
+      title: "Submarine Game Rule",
+      description: "description of game rule",
+      mimeType: "text/plain"
+    }, () => {
       return {
-        contents:[{
-          uri:"file:///game-rule",
-          mimeType:"text/plain",
-          text: getGameRule()
+        contents: [{
+          uri: "file:///game-rule",
+          mimeType: "text/plain",
+          text: this.getGameRule()
         }
         ]
       }
     });
 
-    registerAppResource(this.server,'game-board',resourceUri,{
+    registerAppResource(this.server, 'game-board', resourceUri, {
       mimeType: RESOURCE_MIME_TYPE
-    },async () => {
+    }, async () => {
       return {
         contents: [{
           uri: resourceUri,
@@ -82,7 +84,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         inputSchema: {
           text: z.string().optional(),
         },
-        _meta: { ui: { resourceUri: resourceUri } }
+        _meta: {ui: {resourceUri: resourceUri}}
       },
       ({text}) => {
         console.log(`##${text}`)
@@ -104,7 +106,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         title: "Start a new Submarine attack game",
         description: "Start a new Submarine attack game and show the board to the user.",
         inputSchema: {},
-        _meta: { ui: { resourceUri: resourceUri } }
+        _meta: {ui: {resourceUri: resourceUri}}
       },
       () => {
         return this.makeResponse(this.lang('This is the state where Player 1 is preparing to place his piece. Instruct Player 1 to place his piece. Player 2 should wait for Player 1 to act.',
@@ -145,27 +147,38 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         },
         _meta: {}
       },
-      ({state,locale}) => {
-        console.log('p1 place:',state,locale)
+      ({state, locale}) => {
+        // console.log('p1 place:', state, locale)
         if (locale) {
           this.locale = locale;
         }
-
         if (gameState.phase === "battle") {
-          return {content: [{type: "text", text: `ゲーム状態は戦闘です。配置を設定できません`, annotations: {audience: ["assistant"],}}]}
+          return {
+            content: [{
+              type: "text",
+              text: `ゲーム状態は戦闘です。配置を設定できません`,
+              annotations: {audience: ["assistant"],}
+            }]
+          }
         }
-        console.log('state:',JSON.stringify(state))
+        console.log('state:', JSON.stringify(state))
         const st = GameSnapshotSchema.safeParse(state)
-        if(!st.success) {
-          console.log('error:',JSON.stringify(st.error))
-          return {content: [{type: "text", text: `解析エラー。プレイヤー2はプレイヤー1の駒を配置できません。`, annotations: {audience: ["assistant"],}}]}
+        if (!st.success) {
+          console.log('error:', JSON.stringify(st.error))
+          return {
+            content: [{
+              type: "text",
+              text: `解析エラー。プレイヤー2はプレイヤー1の駒を配置できません。`,
+              annotations: {audience: ["assistant"],}
+            }]
+          }
         }
         const nextGameState = st.data;
-        console.log('receive gameState:',JSON.stringify(nextGameState))
+        console.log('receive gameState:', JSON.stringify(nextGameState))
         try {
           //  TODO 厳格には届いたnextGameStateが妥当に設定されているかベリファイがいる
           applyGameFromJSON(nextGameState)
-          this.setState({...this.state,board:nextGameState});
+          this.setState({...this.state, board: nextGameState});
           return this.setGameState();
           //  TODO 今は仮にAI側盤面は自動生成にする
           // randomFillForPlayer(p2)
@@ -190,23 +203,29 @@ export class MyMCP extends McpAgent<Env, State, {}> {
           })).describe('player2 placement ships'),
           // gameSession: z.string().optional(), //  TODO 通信時に使用
         },
-        _meta: { ui: { resourceUri: resourceUri } }
+        _meta: {ui: {resourceUri: resourceUri}}
       },
       ({placements}) => {
 
         try {
           const validatedPlacements = validatePlacementSpec(placements);
-          if(!validatedPlacements.ok) {
-            return {content: [{type: "text", text: `プレイヤー2の配置が失敗した: ${validatedPlacements.errors.join('\n')} 修正して、再びplayer2-placementを呼び出してください。`, annotations: {audience: ["assistant"],}}]}
+          if (!validatedPlacements.ok) {
+            return {
+              content: [{
+                type: "text",
+                text: `プレイヤー2の配置が失敗した: ${validatedPlacements.errors.join('\n')} 修正して、再びplayer2-placementを呼び出してください。`,
+                annotations: {audience: ["assistant"],}
+              }]
+            }
           }
           applyPlacementsToPlayer(p2, placements)
           // const gameState = state as GameSnapshot
-          console.log('make ai board:',JSON.stringify(p2))
+          console.log('make ai board:', JSON.stringify(p2))
           this.state.board.p2 = p2
           const res = this.setGameState();
 
-          console.log('current:',JSON.stringify(this.state))
-          this.setState({board:gameState,gameSession:this.state.gameSession});
+          console.log('current:', JSON.stringify(this.state))
+          this.setState({board: gameState, gameSession: this.state.gameSession});
           return res
           // applyGameFromJSON(gameState)
           // randomFillForPlayer(p2)
@@ -237,29 +256,29 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         },
         _meta: {}
       },
-      ({state,result}) => {
+      ({state, result}) => {
         //  TODO 現在の保持しているターンと照合する ロジック的にはこちらはまだユーザ状態
         //  TODO ゲームステートの判定は最終的にはこちらでやらないといけない。
         const gameState = state as GameSnapshot
-        console.log('receive gameState:',JSON.stringify(gameState))
+        console.log('receive gameState:', JSON.stringify(gameState))
         try {
           applyGameFromJSON(gameState)
-          this.setState({...this.state,board:gameState});
+          this.setState({...this.state, board: gameState});
         } catch (e: any) {
           console.log('error:', e.toString())
           return {content: [{type: "text", text: `error: ${e.message}`, annotations: {audience: ["assistant"],}}]}
         }
-        if(allSunk(p2.board)) {
+        if (allSunk(p2.board)) {
           //  AIの勝利
-          return this.makeResponse(result+" プレイヤー2の勝利です! Game End.");
+          return this.makeResponse(result + " プレイヤー2の勝利です! Game End.");
         }
         let mes = ''
         switch (gameState.currentPlayer) {
           case 1:
-            mes = result+" プレイヤー1のターンです。プレイヤー2はプレイヤー1の行動を待つ必要があります。"
+            mes = result + " プレイヤー1のターンです。プレイヤー2はプレイヤー1の行動を待つ必要があります。"
             break;
           case 2:
-            mes = result+" プレイヤー2のターン開始。player2-attack-positionを使ってOPPONENT_BOARD の位置にショットを発射してください。row=0 から 6。col=0 から 6"
+            mes = result + " プレイヤー2のターン開始。player2-attack-positionを使ってOPPONENT_BOARD の位置にショットを発射してください。row=0 から 6。col=0 から 6"
             break
         }
         return this.makeResponse(mes);
@@ -276,15 +295,15 @@ export class MyMCP extends McpAgent<Env, State, {}> {
           // gameSession: z.string().optional(),
           // locale: z.string().optional(),
         },
-        _meta: { ui: { resourceUri: resourceUri } }
+        _meta: {ui: {resourceUri: resourceUri}}
       },
-      ({x,y}) => {
+      ({x, y}) => {
         //  手番間違いチェック
-        if(gameState.currentPlayer!==2) {
+        if (gameState.currentPlayer !== 2) {
           return this.makeResponse("プレイヤー1のターンです。プレイヤー2は攻撃することはできません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機する必要があります。");
         }
 
-        const res = receiveAttack(p1.board, {x,y});
+        const res = receiveAttack(p1.board, {x, y});
         gameState.p1 = playerToJSON(p1) //  p1に結果が反映されるのでgameState側に移す
         //  操作と結果をアニメ再生するためのイベントも追加する
         gameState.motion = {
@@ -294,12 +313,12 @@ export class MyMCP extends McpAgent<Env, State, {}> {
           aiWin: false,
         }
 
-        if(allSunk(p1.board)) {
+        if (allSunk(p1.board)) {
           //  AIの勝利
           gameState.currentPlayer = 1;  //  実行後のターンを変える
           gameState.motion.aiWin = true;
           gameState.motion.hit = true;
-          this.setState({...this.state,board:gameState});
+          this.setState({...this.state, board: gameState});
           return this.makeResponse("プレイヤー1の勝利です! Game End.");
         }
         let mes = "プレイヤー2の攻撃は失敗しました。プレイヤー1のターンです。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機する必要があります。現状の双方の攻撃状態を短く評価してプレイヤー1を軽くあおってください。"
@@ -316,44 +335,16 @@ export class MyMCP extends McpAgent<Env, State, {}> {
             gameState.currentPlayer = 1;  //  実行後のターンを変える
             break
         }
-        this.setState({...this.state,board:gameState});
+        this.setState({...this.state, board: gameState});
         return this.makeResponse(mes);
       }
     );
-
-/*
-    registerAppTool(this.server,
-      "restore-game",
-      {
-        title: "Restore game",
-        description: "Restore a game from a previous state and show the board to the user. Do not use.",
-        inputSchema: {
-          state: z.any().describe('Game board state.'),
-          gameSession: z.string().optional(),
-        },
-        _meta: { resourceUri }
-      },
-      ({state,gameSession},_: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
-        const stateInner = state as ExportState
-        try {
-          const engine = new ReversiEngine()
-          engine.import(stateInner)
-          this.setState({board:{...stateInner},gameSession:gameSession || this.state.gameSession,currentSeq:stateInner.seq})
-        } catch (e: any) {
-          console.log('error:', e.toString())
-        }
-
-        return this.makeMessage(`${this.lang('Game is restart.')}\n${this.boardInfo()} ${this.noRepresents}`)
-      }
-    );
-*/
-
   }
 
   locale = 'en';
 
-  private lang(message:string,messageJ?:string) {
-    if(this.locale === 'ja-JP') {
+  private lang(message: string, messageJ?: string) {
+    if (this.locale === 'ja-JP') {
       return messageJ || message;
     }
     return message;
@@ -363,17 +354,17 @@ export class MyMCP extends McpAgent<Env, State, {}> {
     if (isPlacementEnd(p1) && isPlacementEnd(p2)) {
       console.log('state is battle. start battle.')
       setToBattle()
-      this.setState({...this.state,board:gameState});
+      this.setState({...this.state, board: gameState});
       const mes = "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。"
       return this.makeResponse(mes);
     } else if (isPlacementEnd(p1)) {
       console.log('state is placement. 1 ok 2 ng.')
-      this.setState({...this.state,board:gameState});
+      this.setState({...this.state, board: gameState});
       return {
         content: [
           {
             type: "text",
-            text: getPlaceRule(),
+            text: getPlaceRule(this.locale),
             annotations: {
               audience: ["assistant"],
             },
@@ -385,7 +376,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
       console.log('state is placement. 1 ng 2 ng.')
       const mes = "プレイヤー1は駒を配置しなければなりません。プレイヤー1はプレイヤー1の駒の位置を指定しなければなりません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。"
       // const mes = "Assistant's Turn. Shot fire to OPPONENT_BOARD position. row=0 to 6. col=0 to 6"
-      this.setState({...this.state,board:gameState});
+      this.setState({...this.state, board: gameState});
       return {
         content: [
           {
@@ -401,21 +392,25 @@ export class MyMCP extends McpAgent<Env, State, {}> {
     }
   }
 
-  private makeResponse(mes: string ) {
-      const ret:CallToolResult = {
-        content: [
-          {
-            type: "text",
-            text: mes + "\n--------\n" + buildAiDescriptionForAiPlayer(), //  ここでテキストで渡される盤面は常にAI視点 gameState.currentUser=2の盤面となる (本来はユーザにも表示してはいけない)
-            annotations: {
-              audience: ["assistant"],
-            },
-          }
-        ],
-        structuredContent: this.state as any
-      }// as z.infer<typeof CallToolResultSchema>
-      return ret;
-    }
+  getGameRule() {
+    return (this.locale === 'ja-JP' ? gameRuleJp : gameRule) as string;
+  }
+
+  private makeResponse(mes: string) {
+    const ret: CallToolResult = {
+      content: [
+        {
+          type: "text",
+          text: mes + "\n--------\n" + buildAiDescriptionForAiPlayer(), //  ここでテキストで渡される盤面は常にAI視点 gameState.currentUser=2の盤面となる (本来はユーザにも表示してはいけない)
+          annotations: {
+            audience: ["assistant"],
+          },
+        }
+      ],
+      structuredContent: this.state as any
+    }// as z.infer<typeof CallToolResultSchema>
+    return ret;
+  }
 
 }
 

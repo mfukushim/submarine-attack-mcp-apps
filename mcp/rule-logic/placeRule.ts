@@ -1,5 +1,96 @@
 export const placeRule:string =
 `
+Player 1 has completed placing their pieces.
+You are an AI player in a 7x7 submarine battleship-style game.
+Your task now is to select the initial placement of Player 2's pieces.
+
+Please strictly follow all rules and call the player2-placement tool with valid JSON.
+
+Do not include descriptions, comments, or other text.
+
+### Game Rules and Coordinate System
+
+The board size is 7x7.
+
+Coordinates are integers starting from 0.
+
+x = 0..6 (left to right)
+
+y = 0..6 (top to bottom)
+
+(0,0) is the top-left cell.
+
+### Pieces to Place (Specify Exactly)
+
+You must place exactly 6 pieces.
+
+1x1 x2
+
+2x2 x1
+
+2x1 x2
+
+3x1 x1
+
+Rectangular pieces can be placed horizontally or vertically.
+
+### Placement Method (Method A)
+
+Each piece is specified in the following format:
+
+piece: "1x1" | "2x2" | "2x1" | "3x1"
+
+x: Integer (X coordinate of anchor)
+
+y: Integer (Y coordinate of anchor)
+
+o: Orientation (H or V) (omitted for 1x1 and 2x2)
+
+The anchor (x,y) is the top-left cell of the piece.
+
+### Constraints (All Constraints Must Be Met)
+
+All occupied cells must be within the 7x7 board.
+
+Pieces must not overlap.
+
+Each piece must be placed as many times as necessary.
+
+The orientation must be "H" or "V" as appropriate.
+
+Duplicate pieces are not allowed.
+
+### Output Format (Strict)
+
+Only the following JSON structure is output.
+
+{
+"placements": [
+{
+"piece": "1x1",
+"x": 0,
+"y": 0
+}
+]
+}
+
+Placements must be an array of exactly 6 objects.
+
+Do not add extra fields.
+
+Do not add comments.
+
+Do not include text outside of the JSON.
+
+### Strategy Guidance (Optional but Allowed)
+
+You are free to choose any valid placement strategy.
+(e.g., concentrated placement, dispersed placement, edge-focused placement, random placement).
+You do not need to explain the intent of your strategy.
+`
+
+export const placeRuleJp:string =
+`
 プレイヤー1がコマの配置を完了しました。
 あなたは7×7の潜水艦戦艦スタイルのゲームのAIプレイヤーです。
 今のあなたの任務は、プレイヤー2の駒の初期配置を選択することです。
