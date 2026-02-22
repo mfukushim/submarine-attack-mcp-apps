@@ -32,8 +32,11 @@ export const INIT_PATTERN = JSON.stringify({
   selectedPieceKey: '1x1',
   placementHistory: [],
   currentPlayer: 1,
-  p1: playerToJSON(p1),
-  p2: playerToJSON(p2),
+  p1: p1,
+  p2: p2,
+  // p1: playerToJSON(p1),
+  // p2: playerToJSON(p2),
+  seq: 0,
 });
 //  埋め込みhtmlに現在のプレイ状態を受け渡すためのマジック文字列
 //  @ts-ignore
@@ -45,8 +48,11 @@ export const gameState:GameSnapshot ={
   selectedPieceKey: '1x1',
   placementHistory: [],
   currentPlayer: 1,
-  p1: playerToJSON(p1),
-  p2: playerToJSON(p2),
+  p1: p1,
+  p2: p2,
+  // p1: playerToJSON(p1),
+  // p2: playerToJSON(p2),
+  seq: 0,
 }
 
 if(initialState) {
@@ -215,17 +221,17 @@ function applyPlayerFromJSON(target: PlayerState, data: SerializablePlayerState)
   target.inventory = { ...data.inventory };
 }
 
-export function gameToJSON(): GameSnapshot {
-  return {
-    phase: gameState.phase,
-    currentPlayer: gameState.currentPlayer,
-    orientation: gameState.orientation,
-    selectedPieceKey:gameState.selectedPieceKey,
-    placementHistory: [...gameState.placementHistory],
-    p1: playerToJSON(p1),
-    p2: playerToJSON(p2),
-  };
-}
+// export function gameToJSON(): GameSnapshot {
+//   return {
+//     phase: gameState.phase,
+//     currentPlayer: gameState.currentPlayer,
+//     orientation: gameState.orientation,
+//     selectedPieceKey:gameState.selectedPieceKey,
+//     placementHistory: [...gameState.placementHistory],
+//     p1: playerToJSON(p1),
+//     p2: playerToJSON(p2),
+//   };
+// }
 
 export function applyGameFromJSON(snap: GameSnapshot) {
   gameState.phase = snap.phase;
@@ -241,6 +247,7 @@ export function applyGameFromJSON(snap: GameSnapshot) {
   gameState.placementHistory = snap.placementHistory;
 
   gameState.motion = snap.motion
+  gameState.seq = snap.seq
   // setPhaseUI(gameState.phase);
   // renderAll();
 }

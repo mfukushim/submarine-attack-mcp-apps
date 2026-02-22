@@ -160,18 +160,18 @@ import { ref, onMounted } from 'vue';
 import {
   type Coord, type GameSnapshot, inBounds,
   makeEmptyBoard,
-  parseKey, type Phase,
+  parseKey, type Phase, type PieceKey,
   PIECES,
   SIZE
 } from "../Def";
 import {
-  allSunk,
+  allSunk, applyGameFromJSON,
   canPlace,
   currentAttacker,
   currentOpponent,
   currentPlacer,
   expandCells,
-  gameState, gameToJSON, getPlaceRule, isPlacementEnd,
+  gameState, getPlaceRule, isPlacementEnd,
   p1,
   p2, placePiece, randomFillForPlayer, receiveAttack,
 } from "../mcp/rule-logic/logic";
@@ -185,6 +185,7 @@ const gameDisabled = ref(false)
 const clickDisabled = ref(false)
 const gameSession = ref<string | undefined>(undefined)
 const locale = ref('en')
+const recentGameState = ref<GameSnapshot | null>(null);
 
 // ====== DOM参照 ======
 const ownBoardEl = ref<HTMLDivElement | null>(null);
@@ -305,7 +306,7 @@ function handleRotate() {
   gameStateView.value = gameState;
 }
 
-function handleInventoryClick(key: string) {
+function handleInventoryClick(key: PieceKey) {
   gameState.selectedPieceKey = key;
   gameStateView.value.selectedPieceKey = key;
 }
@@ -371,15 +372,15 @@ async function handleLockIn() {
   try {
     if (!app.value) throw new Error('App not found')
   if (gameState.phase === 'placementP1') {
-    gameState.phase = 'placementP2';
-    gameState.placementHistory = [];
-    gameState.selectedPieceKey = '1x1';
-    gameState.orientation = 'H';
-    const state = gameToJSON();
-    console.log('player1 game state:', JSON.stringify(state, null, 2));
+    // gameState.phase = 'placementP2';
+    // gameState.placementHistory = [];
+    // gameState.selectedPieceKey = '1x1';
+    // gameState.orientation = 'H';
+    // const state = gameToJSON();
+    console.log('player1 game state:', JSON.stringify(gameState, null, 2));
     clickDisabled.value = true
     const res = await app.value.callServerTool({
-      name: "player1-placement", arguments: { state: state,gameSession:gameSession.value,locale:locale.value} });
+      name: "player1-placement", arguments: { state: gameState,gameSession:gameSession.value,locale:locale.value} });
     console.log('player1-placement result:', res)
     // const cap = app.value.getHostCapabilities()
     // if (cap?.updateModelContext) {
@@ -483,13 +484,14 @@ function handleTargetBoardClick(e: MouseEvent) {
   }
   setTimeout(async () => {
     gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+    gameState.seq += 1;
     setPhaseUI(gameState.phase);
-    const state = gameToJSON();
+    // const state = gameToJSON();
     gameStateView.value = { ...gameState };
     try {
       if (!app.value) throw new Error('App not found')
       await app.value.callServerTool({
-        name: "player1-attacked", arguments: { state: state,result:resultMes,gameSession:gameSession.value,locale:locale.value} });
+        name: "player1-attacked", arguments: { state: gameState,result:resultMes,gameSession:gameSession.value,locale:locale.value} });
       // const cap = app.value.getHostCapabilities()
       // if (cap?.updateModelContext) {
       //   await app.value.updateModelContext(
@@ -565,32 +567,35 @@ onMounted(async () => {
   };
   instance.ontoolresult = async (result) => {
     console.info("Received tool call result:", result);
-/*
     if (result.structuredContent?.board) {
-      state.value = engine.import(result.structuredContent.board as unknown as GameSnapshot)
+      applyGameFromJSON(result.structuredContent.board as unknown as GameSnapshot);
+      // state.value = engine.import(result.structuredContent.board as unknown as GameSnapshot)
+      gameStateView.value = { ...gameState };
+      renderAll()
       recentGameState.value = result.structuredContent.board as unknown as GameSnapshot
     }
-*/
-    if (result.structuredContent?.gameSession) {
+    if (!gameSession.value && result.structuredContent?.gameSession) {
       gameSession.value = result.structuredContent.gameSession as string
     }
     // const currentSeq = state.value.seq
     // const currentState = await importBoard()
-    // if(currentState?.gameSession && result.structuredContent?.gameSession
-    //     && currentState.gameSession === result.structuredContent?.gameSession) {
-      gameDisabled.value = false
-      // done.value = false
-      clickDisabled.value = false
+    gameStateView.value = { ...gameState };
+    if(gameSession.value && result.structuredContent?.gameSession) {
+      if(gameSession.value === result.structuredContent?.gameSession) {
+        gameDisabled.value = false
+        // done.value = false
+        clickDisabled.value = false
+        return
+      }
       // state.value = engine.import(currentState.board)
       // if (currentSeq === state.value.seq) {
       //   recentGameState.value = currentState.board
       //   return
       // }
-    // }
-    // console.log('Game session mismatch, disabling game',
-    //     currentState?.gameSession,result.structuredContent?.gameSession,currentSeq,state.value.seq)
-    // gameDisabled.value = true
-    // app.value?.sendSizeChanged({ height:50 });
+      console.log('Game session mismatch, disabling game')
+      gameDisabled.value = true
+      app.value?.sendSizeChanged({ height:50 });
+    }
   };
 
   instance.ontoolcancelled = async (params) => {
@@ -632,7 +637,8 @@ h1{font-size:20px;margin:0}.badge{background:#111827;border:1px solid #374151;co
 .pieceIcon{display:inline-grid;gap:2px;background:#0b1220;padding:4px;border-radius:6px;border:1px solid #243042}.pieceIcon .sq{width:10px;height:10px;background:var(--accent)}
 button{background:#111827;color:var(--fg);border:1px solid #334155;padding:8px 12px;border-radius:10px;cursor:pointer}button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#0b1220;border:none}button:disabled{opacity:.5;cursor:not-allowed}
 .boards{display:grid;grid-template-columns:1fr 1fr;gap:24px}.boardWrap h3{margin:8px 0}
-.board{width:min(90vw,420px);aspect-ratio:1/1;background:#0b1220;border:1px solid #243042;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(7,1fr);gap:2px;padding:6px;border-radius:12px}
+.board{width:100%;max-width:420px;aspect-ratio:1/1;background:#0b1220;border:1px solid #243042;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(7,1fr);gap:2px;padding:6px;border-radius:12px}
+@media (max-width:900px){.boards{grid-template-columns:1fr}}
 .cell{background:#0e1626;border:1px solid var(--grid);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;user-select:none}
 .cell.ownPiece{background:#12233a;border-color:#184264;outline:1px solid #1f6aa3}
 .cell.validPreview{outline:2px dashed #22c55e}.cell.invalidPreview{outline:2px dashed #ef4444}

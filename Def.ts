@@ -34,7 +34,8 @@ export const GameSnapshotSchema = z.object({
   currentPlayer: PlayerSchema,
   p1: PlayerStateSchema,
   p2: PlayerStateSchema,
-  motion: z.undefined(MotionSchema)
+  motion: z.optional(MotionSchema),
+  seq: z.number()
 })
 
 // ====== 型 ======
@@ -102,20 +103,20 @@ export interface SerializablePlayerState {
 export type State = {
   board: GameSnapshot;
   gameSession: string;
-  currentSeq: number;
 };
 
-
-export interface GameSnapshot{
-  phase: Phase;
-  orientation: Orientation;
-  selectedPieceKey: string|null;
-  placementHistory: PlacedPiece[];
-  currentPlayer: 1|2;
-  p1: SerializablePlayerState;
-  p2: SerializablePlayerState;
-  motion?: Motion
-}
+export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
+// export interface GameSnapshot{
+//   phase: Phase;
+//   orientation: Orientation;
+//   selectedPieceKey: string|null;
+//   placementHistory: PlacedPiece[];
+//   currentPlayer: 1|2;
+//   p1: SerializablePlayerState;
+//   p2: SerializablePlayerState;
+//   motion?: Motion;
+//   seq: number;
+// }
 
 // ====== 定数 ======
 export const SIZE = 7;
