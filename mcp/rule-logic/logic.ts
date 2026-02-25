@@ -137,10 +137,20 @@ export function randomFillForPlayer(p: PlayerState) {
 export function setToBattle() {
   gameState.phase='battle';
   gameState.currentPlayer=1;
+  gameState.seq = 1
 }
 
 export function allSunk(board: BoardState) { return board.pieces.every(p => p.cells.every(c => p.hits.includes(c))); }
 
+
+export function checkRepeat(board: BoardState, at: Coord) {
+  const k = keyOf(at);
+
+  // すでに攻撃済みなら何もしない
+  if (board.attacks[k]) return true;
+
+  return false;
+}
 
 export function receiveAttack(board: BoardState, at: Coord): 'hit' | 'miss' | 'repeat' {
   const k = keyOf(at);
@@ -286,7 +296,7 @@ function buildSelfBoardString(p: PlayerState): string[] {
   return grid.map((row) => row.join(''));
 }
 
-function buildOpponentKnowledgeString(_: PlayerState, defender: PlayerState): string[] {
+function buildOpponentKnowledgeString(defender: PlayerState): string[] {
   // 相手盤面について自分が「知っている範囲」:
   // '.' = 未攻撃, 'X' = 命中, 'o' = 外れ
   const grid: string[][] = Array.from({ length: SIZE }, () =>
@@ -315,57 +325,18 @@ function countShotsOn(defender: PlayerState): number {
   return Object.entries(defender.board.attacks).length;
 }
 
-// 現在の手番プレイヤー視点のテキストを生成
-export function buildAiDescriptionForCurrentPlayer(): string {
-  const me = currentAttacker();
-  const opp = currentOpponent();
-
-  const selfBoardLines = buildSelfBoardString(me);
-  const oppKnowledgeLines = buildOpponentKnowledgeString(me, opp);
-
-  const totalShots = countShotsOn(opp);
-  const totalHits = countHitsOn(opp);
-
-  const lines: string[] = [];
-
-  lines.push('SubmarineGameState');
-  lines.push(`phase: ${gameState.phase}`);
-  lines.push(`current_player: ${gameState.currentPlayer}`);
-  lines.push('');
-
-  lines.push(`[PLAYER ${gameState.currentPlayer} PERSPECTIVE]`);
-  lines.push('');
-
-  lines.push('SELF_BOARD_TRUE (7x7, y=0..6 top to bottom, x=0..6 left to right)');
-  lines.push("legend: '.'=empty, 'S'=ship, 'X'=hit ship, 'o'=miss");
-  selfBoardLines.forEach((row, y) => {
-    lines.push(`row${y}: ${row}`);
-  });
-  lines.push('');
-
-  lines.push('OPPONENT_BOARD_KNOWLEDGE (7x7, y=0..6 top to bottom, x=0..6 left to right)');
-  lines.push("legend: '.'=unknown, 'X'=hit, 'o'=miss");
-  oppKnowledgeLines.forEach((row, y) => {
-    lines.push(`row${y}: ${row}`);
-  });
-  lines.push('');
-
-  lines.push(`total_shots_fired_by_self: ${totalShots}`);
-  lines.push(`total_hits_on_opponent: ${totalHits}`);
-
-  return lines.join('\n');
-}
-
 
 //  拡張ロジック
 
-// あとでAIと合わせる 現在の手番プレイヤー視点のテキストを生成
+/**
+ * ここは常にplayer2(AI)の視点での盤面を返す
+ */
 export function buildAiDescriptionForAiPlayer(): string {
   const me = p2;
   const opp = p1;
 
   const selfBoardLines = buildSelfBoardString(me);
-  const oppKnowledgeLines = buildOpponentKnowledgeString(me, opp);
+  const oppKnowledgeLines = buildOpponentKnowledgeString(opp);
 
   const totalShots = countShotsOn(opp);
   const totalHits = countHitsOn(opp);
@@ -374,10 +345,10 @@ export function buildAiDescriptionForAiPlayer(): string {
 
   lines.push('SubmarineGameState');
   lines.push(`phase: ${gameState.phase}`);
-  lines.push(`current_player: ${gameState.currentPlayer}`);
+  lines.push(`current_player: 2`);
   lines.push('');
 
-  lines.push(`[PLAYER ${gameState.currentPlayer} PERSPECTIVE]`);
+  lines.push(`[PLAYER 2 PERSPECTIVE]`);
   lines.push('');
 
   lines.push('SELF_BOARD_TRUE (7x7, y=0..6 top to bottom, x=0..6 left to right)');

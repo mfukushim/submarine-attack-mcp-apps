@@ -10,7 +10,7 @@
 
       <h2 ref="currentPlayerLabel">{{ lang('Player 1', 'プレイヤー1') }}</h2>
 
-      <div class="controls">
+      <div class="controls" v-if="gameStateView && gameStateView.phase !== 'battle'">
         <div class="group">
           <label>{{ lang('Direction:', '向き:') }}</label>
           <button @click="handleRotate" :title="lang('Toggle with R key', 'Rキーでも切替')">{{rotateBtnLabel}}</button>
@@ -36,9 +36,9 @@
           </div>
         </div>
         <div class="group phaseOnlyPlacement">
-          <button @click="handleUndo" type="button">{{ lang('Undo Last Placement', '直前の配置を戻す') }}</button>
+          <button @click="handleUndo" type="button">{{ random ? lang('Reset Placement', '配置を初期化する') : lang('Undo Last Placement', '直前の配置を戻す') }}</button>
           <button @click="handleRandomize" type="button">{{ lang('Random Placement', 'ランダム配置') }}</button>
-          <button @click="handleLockIn" type="button" class="primary">{{ lang('Confirm Placement', 'この配置で確定') }}</button>
+          <button :disabled="disableLockIn" @click="handleLockIn" type="button" class="primary">{{ lang('Confirm Placement', 'この配置で確定') }}</button>
         </div>
         <div class="group phaseOnlyBattle hidden">
           <button type="button">{{ lang('End Turn (After Attack)', 'ターン終了（攻撃後）') }}</button>
@@ -71,13 +71,13 @@
             ref="targetBoardEl"
             class="board"
             data-board="target"
-            @click="handleTargetBoardClick"
           >
             <div
               v-for="(cell, idx) in targetBoardCells"
               :key="idx"
               :class="['cell', ...cell.classes]"
               :data-index="idx"
+              @click="handleTargetBoardClick(idx)"
             />
           </div>
           <small class="hint">{{ lang('Attack Phase: Click board to attack', '攻撃フェーズ: 盤面をクリックして攻撃') }}</small>
@@ -156,24 +156,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import {
+  cloneInventory,
   type Coord, type GameSnapshot, inBounds,
   makeEmptyBoard,
-  parseKey, type Phase, type PieceKey,
+  parseKey, type PieceKey,
   PIECES,
-  SIZE
+  SIZE, type State
 } from "../Def";
 import {
   allSunk, applyGameFromJSON,
-  canPlace,
+  canPlace, checkRepeat,
   currentAttacker,
   currentOpponent,
   currentPlacer,
   expandCells,
   gameState, getPlaceRule, isPlacementEnd,
   p1,
-  p2, placePiece, randomFillForPlayer, receiveAttack,
+  p2, placePiece, randomFillForPlayer,
 } from "../mcp/rule-logic/logic";
 import {App, type McpUiHostContext} from "@modelcontextprotocol/ext-apps";
+import type {CallToolResult} from "@modelcontextprotocol/sdk/types.js";
 // import * as e from "cors";
 
 const app = ref<App | null>(null);
@@ -270,17 +272,17 @@ const setInventoryItems = () => {
 }
 
 
-function setPhaseUI(phase: Phase) {
-  const placement = document.querySelector('.phaseOnlyPlacement') as HTMLElement;
-  const battle = document.querySelector('.phaseOnlyBattle') as HTMLElement;
-  if (phase === 'battle') {
-    placement.classList.add('hidden');
-    battle.classList.remove('hidden');
-  } else {
-    placement.classList.remove('hidden');
-    battle.classList.add('hidden');
-  }
-}
+// function setPhaseUI(phase: Phase) {
+//   const placement = document.querySelector('.phaseOnlyPlacement') as HTMLElement;
+//   const battle = document.querySelector('.phaseOnlyBattle') as HTMLElement;
+//   if (phase === 'battle') {
+//     placement.classList.add('hidden');
+//     battle.classList.remove('hidden');
+//   } else {
+//     placement.classList.remove('hidden');
+//     battle.classList.add('hidden');
+//   }
+// }
 
 function updateHeaders() {
   if (!phaseBadge.value || !currentPlayerLabel.value) return;
@@ -353,10 +355,22 @@ function handleOwnBoardClick(idx: number) {
   gameStateView.value.placementHistory = gameState.placementHistory;
   setInventoryItems()
   renderAll();
+  disableLockIn.value = checkLockIn();
 }
 
 function handleUndo() {
   if (gameState.phase === 'battle') return;
+  if(random.value) {
+    random.value = false;
+    gameState.p1.board = makeEmptyBoard();
+    gameState.p1.inventory = cloneInventory();
+    gameState.placementHistory = [];
+    setInventoryItems()
+    renderAll();
+    disableLockIn.value = checkLockIn();
+    return;
+  }
+
   const last = gameState.placementHistory.pop();
   if (!last) return;
   const b = currentPlacer().board;
@@ -365,12 +379,21 @@ function handleUndo() {
   gameStateView.value.placementHistory = gameState.placementHistory;
   setInventoryItems()
   renderAll();
+  disableLockIn.value = checkLockIn();
+}
+
+const disableLockIn = ref(true)
+const random = ref(false)
+
+const checkLockIn = () => {
+  const inv = currentPlacer().inventory;
+  const left = Object.values(inv).reduce((a, b) => a + b, 0);
+  return left > 0;
 }
 
 async function handleLockIn() {
-  const inv = currentPlacer().inventory;
-  const left = Object.values(inv).reduce((a, b) => a + b, 0);
-  if (left > 0) {
+  const left = checkLockIn()
+  if (left) {
     showOverlay(lang('Please place all pieces.', 'すべてのコマを配置してください。'));
     return;
   }
@@ -385,7 +408,7 @@ async function handleLockIn() {
   } else {
     gameState.phase = 'battle';
     gameState.currentPlayer = 1;
-    setPhaseUI(gameState.phase);
+    // setPhaseUI(gameState.phase);
     showOverlay(lang('Attack phase begins. Player 1\'s turn. Press Start when ready.', '攻撃フェーズ開始。プレイヤー1のターンです。準備できたら開始。'));
   }
   gameStateView.value = { ...gameState };
@@ -407,6 +430,8 @@ function handleRandomize() {
   gameState.placementHistory = [];
   gameStateView.value = { ...gameState };
   renderAll();
+  disableLockIn.value = checkLockIn();
+  random.value = true;
 }
 
 function showOverlay(text: string) {
@@ -420,52 +445,46 @@ function hideOverlay() {
   if (turnOverlay.value) turnOverlay.value.classList.add('hidden');
 }
 
-function handleTargetBoardClick(e: MouseEvent) {
+async function handleTargetBoardClick(idx:number) {
   if (gameState.phase !== 'battle' || gameState.currentPlayer !== 1 || !targetBoardEl.value) return;
-  const t = (e.target as HTMLElement).closest('.cell') as HTMLDivElement | null;
-  if (!t) return;
-  const idx = Number(t.dataset.index);
+  // const t = (e.target as HTMLElement).closest('.cell') as HTMLDivElement | null;
+  // if (!t) return;
+  // const idx = Number(t.dataset.index);
   const at = coordFromIndex(idx);
-  const res = receiveAttack(currentOpponent().board, at);
-  if (res === 'repeat') return;
+  const res = checkRepeat(currentOpponent().board, at);
+  if (res) return;
   renderAll();
   clickDisabled.value = true
-  targetBoardEl.value.style.pointerEvents = 'none';
-  let resultMes = lang(`Player 1 attacked Player 2. col=${at.x}, row=${at.y}. `, `プレイヤー1はプレイヤー2を攻撃した。 col=${at.x}, row=${at.y}. `);
-  switch (res) {
-    case 'hit':
-      resultMes += lang(' Hit! ', ' 命中した! ');
-      break;
-    case 'miss':
-      resultMes += lang(' Miss. ', ' 外れた. ');
-      break;
-  }
-  setTimeout(async () => {
-    gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
-    gameState.seq += 1;
-    setPhaseUI(gameState.phase);
-    gameStateView.value = { ...gameState };
-    try {
-      if (!app.value) throw new Error('App not found')
-      await app.value.callServerTool({
-        name: "player1-attacked", arguments: { state: gameState,result:resultMes,gameSession:gameSession.value,locale:locale.value} });
-      let mes = ''
-      if (allSunk(currentOpponent().board)) {
-        mes = lang(`${currentAttacker().name} wins!`, `${currentAttacker().name} の勝ち！`)
-      } else {
-        mes = lang(`Your turn.`, `あなたの手番です。`)
-      }
-      const toolMsg = lang('Please call the get-board tool to check the current board state.', 'get-boardのツールを呼び出して現在の盤面を確認してください。');
-      await app.value.sendMessage({
-        role: "user",
-        content: [{type:'text',text:`${resultMes} ${mes} ${toolMsg}`}]
-      })
-    } catch (e) {
-      console.error('call error:', e)
+  gameStateView.value = { ...gameState };
+  try {
+    if (!app.value) throw new Error('App not found')
+    const res = await app.value.callServerTool({
+      name: "player1-attack-position", arguments: { state: at,gameSession:gameSession.value,locale:locale.value} });
+    if(res.structuredContent?.board) {
+      applyGameFromJSON(res.structuredContent.board as unknown as GameSnapshot);
+      gameStateView.value = { ...gameState };
+      renderAll()
     }
 
-    if (targetBoardEl.value) targetBoardEl.value.style.pointerEvents = '';
-  }, 500);
+    let mes = ''
+    mes = lang(`Your turn.`, `あなたの手番です。`)
+    if (allSunk(currentOpponent().board)) {
+      //  currentPlayerはMCP側ですでに進めている。ここは固定的にplayer1の勝利
+      mes = lang(`Player 1 wins!`, `Player 1 の勝ち！`)
+      showOverlay(mes);
+    } else {
+      mes = lang(`Your turn.`, `あなたの手番です。`)
+    }
+    const toolMsg = lang('Please call the get-board tool to check the current board state.', 'get-boardのツールを呼び出して現在の盤面を確認してください。');
+    await app.value.sendMessage({
+      role: "user",
+      content: [{type:'text',text:`${mes} ${toolMsg}`}]
+    })
+  } catch (e) {
+    console.error('call error:', e)
+  }
+
+  if (targetBoardEl.value) targetBoardEl.value.style.pointerEvents = '';
 }
 
 function setmessage() {
@@ -481,6 +500,16 @@ function setmessage() {
       "Player 1 must place pieces. Player 1 must specify the positions of Player 1's pieces. Player 2 (Assistant) waits until Player 1 (User) acts.",
       "プレイヤー1は駒を配置しなければなりません。プレイヤー1はプレイヤー1の駒の位置を指定しなければなりません。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）が行動するまで待機します。"
     );
+  }
+}
+
+async function importBoard() {
+  try {
+    if (!app.value) throw new Error('App not found')
+    const result:CallToolResult = await app.value.callServerTool({ name: "get-board", arguments: {token:"user"},_meta:{progressToken:"abcd"} });
+    return result.structuredContent as unknown as State;
+  } catch (e) {
+    console.log('Import error:', e)
   }
 }
 
@@ -501,16 +530,24 @@ onMounted(async () => {
   };
   instance.ontoolresult = async (result) => {
     console.info("Received tool call result:", result);
-    if (result.structuredContent?.board) {
-      applyGameFromJSON(result.structuredContent.board as unknown as GameSnapshot);
-      gameStateView.value = { ...gameState };
-      renderAll()
-      recentGameState.value = result.structuredContent.board as unknown as GameSnapshot
-    }
+    // if (result.structuredContent?.board) {
+    //   applyGameFromJSON(result.structuredContent.board as unknown as GameSnapshot);
+    //   gameStateView.value = { ...gameState };
+    //   renderAll()
+    //   recentGameState.value = result.structuredContent.board as unknown as GameSnapshot
+    // }
+    const currentBoard = await importBoard()
+    console.log('currentBoard:', currentBoard)
+
     if (!gameSession.value && result.structuredContent?.gameSession) {
       gameSession.value = result.structuredContent.gameSession as string
     }
-    gameStateView.value = { ...gameState };
+    if(currentBoard) {
+      applyGameFromJSON(currentBoard.board);
+      gameStateView.value = { ...gameState };
+      renderAll()
+      recentGameState.value = currentBoard.board
+    }
     if(gameSession.value && result.structuredContent?.gameSession) {
       if(gameSession.value === result.structuredContent?.gameSession) {
         gameDisabled.value = false
@@ -536,14 +573,15 @@ onMounted(async () => {
   await instance.connect(undefined,{});
   app.value = instance;
   hostContext.value = instance.getHostContext();
+  console.log('hostContext:', hostContext.value)
   if (baseApp.value) {
     const { width, height } = baseApp.value?.getBoundingClientRect();
     console.log('width:', width, 'height:', height)
-    app.value.sendSizeChanged({ height:Math.floor(height*1.2) });
+    app.value.sendSizeChanged({ height:Math.floor(height) });
   }
   locale.value = hostContext.value?.locale || 'en'
 
-  setPhaseUI(gameState.phase);
+  // setPhaseUI(gameState.phase);
   gameStateView.value = { ...gameState };
   rotateBtnLabel.value = gameState.orientation === 'H'
     ? lang('Horizontal', '横向き')

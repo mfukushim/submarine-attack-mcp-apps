@@ -8,7 +8,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "reversi-mcp-apps",
+	"name": "submarine-attack-mcp-apps",
 	"main": "mcp/index.ts",
 	"compatibility_date": "2025-03-10",
 	"compatibility_flags": [

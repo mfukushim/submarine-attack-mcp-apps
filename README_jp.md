@@ -1,27 +1,30 @@
-# リバーシ MCP Apps
-
+# 潜水艦攻撃ゲーム MCP-UI  
 
 Japanese / [English](./README.md)
 
-> https://github.com/mfukushim/reversi-mcp-ui からマイグレーション中です。
+> https://github.com/mfukushim/submarine-attack-mcp-ui からマイグレーション中です。
 
-自分の手番(黒固定)を画面上のクリックで操作できます。  
+MCP Appsによる[潜水艦ゲーム](https://ja.wikipedia.org/wiki/%E6%B5%B7%E6%88%A6%E3%82%B2%E3%83%BC%E3%83%A0)です。  
 
-ですが、最大の特徴は **「リバーシのルールを裁定するのはMCPが行っているため、AIがゲームのルールをズルすることが困難」** な点です。  
+ゲームルールは任天堂のWi-Fi対応 世界のだれでもアソビ大全 のグリッドアタックに近いものです(3x1攻撃はまだ入っていない)
 
-リバーシは単純なのでAIがゲームルールのズルをすることはほとんどありませんが、複雑なゲームを行う場合はAIはズルをすることがよくあることは知られています。  
-このMCPサーバーではゲームルールはMCPが処理するためAIはズルを行うことが困難です(注意: 現状いくつか制約があります)  
+**ゲームルール**  
+[mcp/rule-logic/gameRule.ts](mcp/rule-logic/gameRule.ts)  
 
-TypeScriptの比較的シンプルな構成にしているので、同様のボードゲームも参考にして作ることが出来ると考えます。  
+<img width="400" alt="image" src="./web_media/img_1.png" />  
+<img width="300" alt="image" src="./web_media/img.png" />  
+<img width="300" alt="image" src="./web_media/img_2.png" />  
 
-<img width="400" alt="image" src="./blog_media/img.png" />
+
+潜水艦ゲームのルールと盤面制御はMCPが行います。ユーザはプレイヤー1、AIはプレイヤー2として対戦する形式となります。
 
 
 ## 動作するMCPクライアント  
 
 現時点 Claude Desktop for Windowsでの動作を確認しています。  
 MCP Appsの仕様に準拠しているため、MCP Apps対応クライアントでは動く可能性が高いです。  
-Avatar-Shellも近日中にMCP Appsに対応予定です。  
+以下のMCPクライアントでも動作を確認しています。  
+- Avatar-Shell  https://github.com/mfukushim/avatar-shell  
 
 > 注意 このMCPサーバーはui:// スキーマによるhtmlデータを一画面、一手ごとに出力します。 使い始め時は想定外のトークン消費がないか確認してください。
 
@@ -38,16 +41,14 @@ Cloudflare workersでのデモを以下で公開しています。
 ```json
 {
   "mcpServers": {
-    "reversi": {
+    "submarine": {
       "type": "streamable-http",
-      "url": "https://reversi-mcp-apps.daisycodes.workers.dev/mcp"
+      "url": "https://submarine-attack-mcp-apps.daisycodes.workers.dev/mcp"
     }
   }
 }
 ```
 > 注意: wrangler起動はDocker container内ではエラーになるようです。  
-
-正常にreversiを接続後、「リバーシをプレイしてください」で実行可能です。  
 
 (公開サーバーは状況によっては停止するかもしれません)
 
@@ -68,13 +69,26 @@ npm run dev # run wrangler local
 ```json
 {
   "mcpServers": {
-    "reversi": {
+    "submarine": {
       "type": "streamable-http",
       "url": "http://localhost:8787/mcp"
     }
   }
 }
 ```
+
+1. まずゲームルールをAIに読み込ませるために、MCPリソースのGameRuleを読み込ませてください。  
+   <img width="300" alt="image" src="./web_media/img_3.png" />  
+MCPクライアントによってはリソース読み込みが出ない場合があります。GameRuleを読み込ませなくてもAIは一般知識でプレイが可能ですが、ゲーム進行が安定しない場合があります。  
+2. その後、「submarineをプレイしてください」などをプロンプロ入力してゲームの開始を指示してください。ゲームが開始します。
+3. 最初は自分の盤面のコマ配置をしてください。ランダム配置ボタンで自動配置もできます。配置が完了したら「完了」ボタンを押してください。
+3. MCPクライアントによってはゲームの進行のため、コマのクリックの後にエンターキーを押してプロンプト送信をする必要がある場合があります。press enter等が出たら、流し込まれたプロンプトを確認して送信してください。  
+4. 自分のコマ配置が完了したらAI側がコマ配置を行います。LLMの性能によっては一回で配置を成功できないことがあるため、盤面状態がプレイヤー2配置モードのままの場合は「player2-placementを使って配置してください」などでAIに配置を催促してください。  
+5. 配置が完了したら、AIと交互に相手側の盤面をクリックして攻撃します。ゲームの進行でクリック後にエンターキーが必要な場合があります。  
+
+
+
+
 
 ## tool関数とUI Actions
 
@@ -83,33 +97,29 @@ npm run dev # run wrangler local
 - new-game  
   ゲーム初期画面を表示します。ゲーム途中の場合は強制的に初期画面にします。
 - get-board  
-  リバーシ盤面を取得する。最初に実行時はゲーム初期画面を表示します。
-- select-user  
-  黒石(ユーザ手番)の石を配置します。座標はA1～H8で指定します。手番をパスするしかないときは PASS で呼び出します。ゲームを終わらせる/リセットする場合は NEW で呼び出します。  
-  UI Actionsが実装されている環境では使わずにゲームできます。その場合MCPクライアントでselect-userのtool関数を呼び出せない設定にすればAIがユーザ手番を操作できません。    
-- select-assistant  
-  白石(AI手番)の石を配置します。座標はA1-H8で指定します。手番をパスするしかないときは PASS で呼び出します。
-- restore-game  
-  中断したゲームを復元します(調整中)
+  ゲーム盤面をAIが取得します。ユーザには表示されません。取得盤面はAI側の盤面のみです。
+- show-board  
+  ゲーム盤面をAIが取得し、ユーザにもゲーム盤面を表示します。AIにはAI側盤面が、ユーザにはユーザ側盤面が表示されます。  
+- player1-placement  
+  プレイヤー1のコマ配置。盤面jsが呼び出す想定のツールです。  
+- player2-placement  
+  プレイヤー2のコマ配置。AIがMCP呼び出しする想定のツールです。  
+- player1-attacked  
+  プレイヤー1の攻撃情報。盤面jsが呼び出す想定のツールです。  
+- player2-attack-position
+  プレイヤー2の攻撃情報。AIがMCP呼び出しする想定のツールです。  
 
 
 #### Resource
 
-- ui://reversi-mcp-ui/game-board  
+- ui://submarine-mcp-apps/game-board  
   盤面html+js (Vueレンダリング)  
 
 
 ## プログラム構成  
 
-MCPサーバー内でリバーシのルール処理を実行します。このためルールの実行にAIは直接介入できません。  
-これにより、AIでよく起きる「AIがルール上のズルをする」ことを抑止してゲームが出来ます。  
-
-> 注意  
-> 現在の仕様として、厳格には次のケースでAIがルールに干渉することがあります。  
-> - AIがユーザの手番のtool (select-user) を勝手に呼び出してしまう可能性
-> - AIがユーザの手番の操作を読み取ってしまう可能性 (リバーシでは問題になりませんが、打つ手や手札を隠すゲームなどでは対策要)  
-> 
-
+MCPサーバー内で潜水艦ゲームのルール処理を実行します。このためルールの実行にAIは直接介入できません。  
+これにより、AIでよく起きる「AIがルール上のズルをする」ことを抑止してゲームが出来ます。
 
 
 #### MCP処理部
