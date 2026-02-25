@@ -1,8 +1,8 @@
-# 潜水艦攻撃ゲーム MCP-UI  
+# 潜水艦攻撃ゲーム MCP Apps    
 
 Japanese / [English](./README.md)
 
-> https://github.com/mfukushim/submarine-attack-mcp-ui からマイグレーション中です。
+> https://github.com/mfukushim/submarine-attack-mcp-ui から書き換えです。
 
 MCP Appsによる[潜水艦ゲーム](https://ja.wikipedia.org/wiki/%E6%B5%B7%E6%88%A6%E3%82%B2%E3%83%BC%E3%83%A0)です。  
 
@@ -11,8 +11,8 @@ MCP Appsによる[潜水艦ゲーム](https://ja.wikipedia.org/wiki/%E6%B5%B7%E6
 **ゲームルール**  
 [mcp/rule-logic/gameRule.ts](mcp/rule-logic/gameRule.ts)  
 
-<img width="400" alt="image" src="./web_media/img_1.png" />  
 <img width="300" alt="image" src="./web_media/img.png" />  
+<img width="400" alt="image" src="./web_media/img_1.png" />  
 <img width="300" alt="image" src="./web_media/img_2.png" />  
 
 
@@ -26,13 +26,14 @@ MCP Appsの仕様に準拠しているため、MCP Apps対応クライアント�
 以下のMCPクライアントでも動作を確認しています。  
 - Avatar-Shell  https://github.com/mfukushim/avatar-shell  
 
-> 注意 このMCPサーバーはui:// スキーマによるhtmlデータを一画面、一手ごとに出力します。 使い始め時は想定外のトークン消費がないか確認してください。
+> 注意 このMCPサーバーはui:// スキーマによるhtmlデータを一画面、一手ごとに出力します。MCPクライアントの作りによってはトークンの消費が大きい場合があります。
+> 使い始め時は想定外のトークン消費がないか確認してください。
 
 ## はじめかた 
 
 #### 公開サーバー
 
-リバーシMCP Appsは、CloudFlare AI Agent のMCPAgentの仕組みの上で作られており、Streamable-http接続に対応しています。  
+潜水艦MCP Appsは、CloudFlare AI Agent のMCPAgentの仕組みの上で作られており、Streamable-http接続に対応しています。  
 
 Cloudflare workersでのデモを以下で公開しています。  
 
@@ -90,21 +91,22 @@ MCPクライアントによってはリソース読み込みが出ない場合�
 
 
 
-## tool関数とUI Actions
+## tool関数
 
 #### tool functions
 
 - new-game  
   ゲーム初期画面を表示します。ゲーム途中の場合は強制的に初期画面にします。
 - get-board  
-  ゲーム盤面をAIが取得します。ユーザには表示されません。取得盤面はAI側の盤面のみです。
+  ゲーム盤面をAIが取得します。ユーザには表示されません。取得盤面はAI側の盤面のみです。  
+  AIが知らないtokenを指定することでユーザ側の盤面情報を取得しhtml画面の更新にも使います。  
 - show-board  
   ゲーム盤面をAIが取得し、ユーザにもゲーム盤面を表示します。AIにはAI側盤面が、ユーザにはユーザ側盤面が表示されます。  
 - player1-placement  
   プレイヤー1のコマ配置。盤面jsが呼び出す想定のツールです。  
 - player2-placement  
   プレイヤー2のコマ配置。AIがMCP呼び出しする想定のツールです。  
-- player1-attacked  
+- player1-attack-position  
   プレイヤー1の攻撃情報。盤面jsが呼び出す想定のツールです。  
 - player2-attack-position
   プレイヤー2の攻撃情報。AIがMCP呼び出しする想定のツールです。  
