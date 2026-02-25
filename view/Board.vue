@@ -400,11 +400,11 @@ async function handleLockIn() {
   try {
     if (!app.value) throw new Error('App not found')
   if (gameState.phase === 'placementP1') {
-    console.log('player1 game state:', JSON.stringify(gameState, null, 2));
+    // console.log('player1 game state:', JSON.stringify(gameState, null, 2));
     clickDisabled.value = true
-    const res = await app.value.callServerTool({
+    await app.value.callServerTool({
       name: "player1-placement", arguments: { state: gameState,gameSession:gameSession.value,locale:locale.value} });
-    console.log('player1-placement result:', res)
+    // console.log('player1-placement result:', res)
   } else {
     gameState.phase = 'battle';
     gameState.currentPlayer = 1;
@@ -537,7 +537,7 @@ onMounted(async () => {
     //   recentGameState.value = result.structuredContent.board as unknown as GameSnapshot
     // }
     const currentBoard = await importBoard()
-    console.log('currentBoard:', currentBoard)
+    // console.log('currentBoard:', currentBoard)
 
     if (!gameSession.value && result.structuredContent?.gameSession) {
       gameSession.value = result.structuredContent.gameSession as string
@@ -573,7 +573,7 @@ onMounted(async () => {
   await instance.connect(undefined,{});
   app.value = instance;
   hostContext.value = instance.getHostContext();
-  console.log('hostContext:', hostContext.value)
+  // console.log('hostContext:', hostContext.value)
   if (baseApp.value) {
     const { width, height } = baseApp.value?.getBoundingClientRect();
     console.log('width:', width, 'height:', height)

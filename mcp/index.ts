@@ -5,10 +5,7 @@ import {z} from "zod";
 import {registerAppResource, registerAppTool, RESOURCE_MIME_TYPE} from "@modelcontextprotocol/ext-apps/server";
 import {
   type CallToolResult,
-  type ServerNotification,
-  type ServerRequest
 } from "@modelcontextprotocol/sdk/types.js";
-import type {RequestHandlerExtra} from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { GameSnapshotSchema, type State} from "../Def";
 import {
   allSunk,
@@ -87,7 +84,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         _meta: {ui: {resourceUri: resourceUri}}
       },
       ({text}) => {
-        // console.log(`##${text}`)
+        console.log(`##${text}`)
         return {
           content: [{
             type: "text",
@@ -122,7 +119,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
           // ui: { resourceUri: resourceUri }
         }
       },
-      ({token},req: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      ({token}) => {
         // console.log('get-board called',token,req)
         return this.getBoardData('',token==='user')
       }
@@ -136,7 +133,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
           ui: { resourceUri: resourceUri }
         }
       },
-      (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      (_) => {
         // console.log('show-board called',extra)
         return this.getBoardData('',false)
       }
@@ -311,7 +308,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
       },
       ({x, y}) => {
         applyGameFromJSON(this.state.board)
-        console.log('p2 gameState1:', JSON.stringify(gameState))
+        // console.log('p2 gameState1:', JSON.stringify(gameState))
         //  手番間違いチェック
         if (gameState.currentPlayer !== 2) {
           return this.makeResponse(this.lang("It's Player 1's turn. Player 2 cannot attack. Player 2 (the assistant) must wait until Player 1 (the user) acts.",
@@ -335,7 +332,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
           gameState.motion.hit = true;
           gameState.seq++
           this.setState({...this.state, board: gameState});
-          console.log('p2 gameState2:', JSON.stringify(gameState))
+          // console.log('p2 gameState2:', JSON.stringify(gameState))
           return this.makeResponse(this.lang("Player 2 wins! Game End.","プレイヤー 2の勝利です! Game End."));
         }
         let mes = this.lang("Player 2's attack has failed. It is Player 1's turn. Player 2 (assistant) must wait for Player 1 (user) to act. Give a brief assessment of the current state of both attacks and give Player 1 a little encouragement.",
@@ -357,7 +354,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         }
         gameState.seq++
         this.setState({...this.state, board: gameState});
-        console.log('p2 gameState3:', JSON.stringify(gameState))
+        // console.log('p2 gameState3:', JSON.stringify(gameState))
         return this.makeResponse(mes);
       }
     );
@@ -394,7 +391,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         "戦闘開始。プレイヤー1のターン。プレイヤー2（アシスタント）はプレイヤー1（ユーザー）の行動を待ちます。")
       return this.makeResponse(mes);
     } else if (isPlacementEnd(p1)) {
-      console.log('state is placement. 1 ok 2 ng.')
+      // console.log('state is placement. 1 ok 2 ng.')
       gameState.phase = 'placementP2'
       this.setState({...this.state, board: gameState});
       return {
@@ -436,14 +433,11 @@ export class MyMCP extends McpAgent<Env, State, {}> {
 
   private makeResponse(mes: string,isUser=false) {
     let state = this.state;
-    // if(isUser) {
-    //   state = {...state,board:{...this.state.board,p2: {...this.state.board.p2,board: {...this.state.board.p2.board,
-    //           pieces: this.state.board.p2.board.pieces.map(p=>({...p,origin: {x:-1,y:-1},cells: []}))}}}};
     if(!isUser) {
       state = {...state,board:{...this.state.board,p1: {...this.state.board.p1,board: {...this.state.board.p1.board,
               pieces: this.state.board.p1.board.pieces.map(p=>({...p,origin: {x:-1,y:-1},cells: []}))}}}};
     }
-    console.log('makeResponse state:', JSON.stringify(state))
+    // console.log('makeResponse state:', JSON.stringify(state))
     const ret: CallToolResult = {
       content: [
         {
@@ -455,7 +449,7 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         }
       ],
       structuredContent: state as any
-    }// as z.infer<typeof CallToolResultSchema>
+    }
     return ret;
   }
 
