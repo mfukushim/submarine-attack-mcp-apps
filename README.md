@@ -92,7 +92,7 @@ Please configure the following MCP settings on each MCP client.
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://localhost:8787/mcp"
+        "http://localhost:8787/mcp"
       ]
     }
   }

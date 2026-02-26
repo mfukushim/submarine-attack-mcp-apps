@@ -91,7 +91,7 @@ npm run dev # run wrangler local
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://localhost:8787/mcp"
+        "http://localhost:8787/mcp"
       ]
     }
   }
