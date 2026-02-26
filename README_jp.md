@@ -37,8 +37,24 @@ MCP Appsの仕様に準拠しているため、MCP Apps対応クライアント�
 
 Cloudflare workersでのデモを以下で公開しています。  
 
-各MCPクライアントで以下のMCP設定を行ってください。  
+各MCPクライアントで以下のMCP設定を行ってください。 
 
+- Claude Desktop(oauth必須MCPクライアント)  
+```json
+{
+  "mcpServers": {
+    "submarine": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://submarine-attack-mcp-apps.daisycodes.workers.dev/mcp"
+      ]
+    }
+  }
+}
+```
+
+- oauth必須ではないMCPクライアント (Goose, Avatar-Shell等)  
 ```json
 {
   "mcpServers": {

@@ -41,6 +41,22 @@ A demo using Cloudflare workers is available below.
 
 Please configure the following MCP settings on each MCP client.
 
+- Claude Desktop(oauth required MCP client)
+```json
+{
+  "mcpServers": {
+    "submarine": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://submarine-attack-mcp-apps.daisycodes.workers.dev/mcp"
+      ]
+    }
+  }
+}
+```
+
+- MCP clients that do not require OAuth (Goose, Avatar-Shell, etc.)  
 ```json
 {
   "mcpServers": {
