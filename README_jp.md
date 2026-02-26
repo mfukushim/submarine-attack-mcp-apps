@@ -9,7 +9,7 @@ MCP Appsによる[潜水艦ゲーム](https://ja.wikipedia.org/wiki/%E6%B5%B7%E6
 ゲームルールは任天堂のWi-Fi対応 世界のだれでもアソビ大全 のグリッドアタックに近いものです(3x1攻撃はまだ入っていない)
 
 **ゲームルール**  
-[mcp/rule-logic/gameRule.ts](mcp/rule-logic/gameRule.ts)  
+[mcp/rule-logic/gameRule.ts](https://raw.githubusercontent.com/mfukushim/submarine-attack-mcp-apps/refs/heads/master/mcp/rule-logic/gameRule.ts)  
 
 <img width="300" alt="image" src="./web_media/img.png" />  
 <img width="400" alt="image" src="./web_media/img_1.png" />  

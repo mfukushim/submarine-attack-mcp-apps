@@ -12,7 +12,7 @@ import {
   applyGameFromJSON, applyPlacementsToPlayer,
   buildAiDescriptionForAiPlayer,
   gameState,
-  getPlaceRule, isPlacementEnd, p1, p2, playerToJSON, receiveAttack, setToBattle, validatePlacementSpec
+  getPlaceRule, isPlacementEnd, newGame, p1, p2, playerToJSON, receiveAttack, setToBattle, validatePlacementSpec
 } from "./rule-logic/logic.ts";
 import {gameRule, gameRuleJp} from "./rule-logic/gameRule.ts";
 
@@ -106,6 +106,8 @@ export class MyMCP extends McpAgent<Env, State, {}> {
         _meta: {ui: {resourceUri: resourceUri}}
       },
       () => {
+        newGame()
+        this.setState({...this.state, board: gameState});
         return this.makeResponse(this.lang('This is the state where Player 1 is preparing to place his piece. Instruct Player 1 to place his piece. Player 2 should wait for Player 1 to act.',
           'これはプレイヤー1が駒を配置する準備をしている状態です。プレイヤー1に駒を配置するよう指示してください。プレイヤー2はプレイヤー1の行動を待ってください。'));
       });

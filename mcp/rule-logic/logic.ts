@@ -58,10 +58,10 @@ if(initialState) {
   applyGameFromJSON(JSON.parse(initialState))
 }
 
+export function newGame() {
+  applyGameFromJSON(JSON.parse(initialState))
+}
 
-
-console.log('INIT_PATTERN',INIT_PATTERN)
-console.log('gameState',gameState)
 
 
 
@@ -250,6 +250,8 @@ export function applyGameFromJSON(snap: GameSnapshot) {
 
   applyPlayerFromJSON(p1, snap.p1);
   applyPlayerFromJSON(p2, snap.p2);
+  gameState.p1 = p1;
+  gameState.p2 = p2;
 
   // ★注意：配置のundo履歴は復元しない（必要なら別途シリアライズ）
   // gameState.placementHistory = [];

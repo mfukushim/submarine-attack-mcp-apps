@@ -12,7 +12,7 @@ The game rules are similar to the grid attack in Nintendo's Wi-Fi Clubhouse Game
 
 
 **Game Rules**  
-[mcp/rule-logic/gameRule.ts](mcp/rule-logic/gameRule.ts)
+[mcp/rule-logic/gameRule.ts](https://raw.githubusercontent.com/mfukushim/submarine-attack-mcp-apps/refs/heads/master/mcp/rule-logic/gameRule.ts)
 
 <img width="300" alt="image" src="./web_media/img.png" />  
 <img width="400" alt="image" src="./web_media/img_1.png" />  
