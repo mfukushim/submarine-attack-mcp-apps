@@ -84,6 +84,22 @@ npm run dev # run wrangler local
 
 Please configure the following MCP settings on each MCP client.  
 
+- Claude Desktop(oauth required MCP client)
+```json
+{
+  "mcpServers": {
+    "submarine": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://localhost:8787/mcp"
+      ]
+    }
+  }
+}
+```
+
+- MCP clients that do not require OAuth (Goose, Avatar-Shell, etc.)  
 ```json
 {
   "mcpServers": {
