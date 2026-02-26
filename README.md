@@ -142,6 +142,8 @@ Please configure the following MCP settings on each MCP client.
 
 #### Resource
 
+- file:///game-rule  
+  Game rules text resource (English/Japanese)  
 - ui://submarine-mcp-apps/game-board  
   Board html+js (Vue rendering)  
 

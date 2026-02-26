@@ -145,7 +145,8 @@ MCPクライアントによってはリソース読み込みが出ない場合�
 
 
 #### Resource
-
+- file:///game-rule  
+  ゲームルールのテキストリソース(英語/日本語)  
 - ui://submarine-mcp-apps/game-board  
   盤面html+js (Vueレンダリング)  
 
