@@ -179,3 +179,4 @@ pnpm run deploy # deploy to cloudflare workers
 
 ## ガイド  
 
+https://note.com/marble_walkers/n/na7e577612b27  
